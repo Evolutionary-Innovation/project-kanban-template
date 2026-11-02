@@ -87,7 +87,7 @@
         <h2 id="graph-heading" tabindex="-1">Project dependencies</h2>
         <p>Whole-project view, including isolated tasks. Shared search and filters apply in both views; direct prerequisites outside the matches are labelled as dependency context.</p>
         <p id="graph-help">Arrows run from prerequisite to dependent: A &#8594; B means B depends on A. Select a node to inspect it. Use arrow keys or Home/End to navigate nodes, Enter to inspect, and Escape to return to the graph controls.</p>
-        <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Dashed nodes/arrows: unresolved references. Cycle warnings identify tasks, not every edge in a cycle.</p>
+        <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Purple outlines: longest unweighted dependency chain. Dashed nodes/arrows: unresolved references. Cycle warnings identify tasks, not every edge in a cycle.</p>
         <div class="graph-controls" role="group" aria-label="Graph viewport">
           <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit graph</button>
           <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom in</button>
@@ -99,6 +99,14 @@
           <button id="graph-whole-project" class="secondary-button" type="button" disabled>Whole project</button>
         </div>
         <p id="graph-message" role="status" aria-live="polite" aria-atomic="true"></p>
+        <section class="graph-workflow" aria-labelledby="graph-workflow-heading">
+          <h3 id="graph-workflow-heading">Workflow intelligence</h3>
+          <p>These are project-wide measures, independent of active filters. Dependency readiness is advisory only; it is not a status, claim, or authorization to execute.</p>
+          <dl id="graph-workflow-summary"></dl>
+          <h4>Longest dependency chain (unweighted)</h4>
+          <p id="graph-critical-chain" class="critical-chain"></p>
+          <p>Cycle tasks are excluded. This structural chain is not a schedule critical path because task durations are not configured.</p>
+        </section>
         <div id="graph-error" class="graph-error" hidden>
           <p id="graph-error-message"></p>
           <button id="graph-retry" class="secondary-button" type="button">Retry graph</button>

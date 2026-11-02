@@ -1,7 +1,81 @@
-import { filterTasks, getCardPresentation } from "./board-view.mjs";
+import {
+  filterTasks,
+  getCardPresentation,
+  getDependencyReadiness,
+  getWorkflowSummary,
+} from "./board-view.mjs";
 
 export const GRAPH_NODE_WIDTH = 236;
 export const GRAPH_NODE_HEIGHT = 116;
+
+export function getDownstreamTaskIds(graph, taskId) {
+  if (!Array.isArray(graph?.nodes) || !Array.isArray(graph.edges)) {
+    throw new TypeError("A dependency graph is required.");
+  }
+  const taskIds = new Set(graph.nodes.map(({ id }) => id));
+  if (!taskIds.has(taskId)) return [];
+  const adjacency = new Map([...taskIds].map((id) => [id, new Set()]));
+  for (const { source, target, unresolved } of graph.edges) {
+    if (!unresolved && taskIds.has(source) && taskIds.has(target)) {
+      adjacency.get(source).add(target);
+    }
+  }
+  const visited = new Set([taskId]);
+  const pending = [taskId];
+  for (let index = 0; index < pending.length; index += 1) {
+    for (const dependent of adjacency.get(pending[index])) {
+      if (visited.has(dependent)) continue;
+      visited.add(dependent);
+      pending.push(dependent);
+    }
+  }
+  return [...visited].filter((id) => id !== taskId).sort((left, right) => left.localeCompare(right));
+}
+
+export function findLongestDependencyChain(graph) {
+  if (!Array.isArray(graph?.nodes) || !Array.isArray(graph.edges) ||
+      !Array.isArray(graph.cyclicTaskIds)) {
+    throw new TypeError("A dependency graph with cycle diagnostics is required.");
+  }
+  const cyclicIds = new Set(graph.cyclicTaskIds);
+  const taskIds = new Set(graph.nodes.map(({ id }) => id).filter((id) => !cyclicIds.has(id)));
+  const adjacency = new Map([...taskIds].map((id) => [id, new Set()]));
+  const indegree = new Map([...taskIds].map((id) => [id, 0]));
+  for (const { source, target, unresolved } of graph.edges) {
+    if (unresolved || !taskIds.has(source) || !taskIds.has(target)) continue;
+    if (adjacency.get(source).has(target)) continue;
+    adjacency.get(source).add(target);
+    indegree.set(target, indegree.get(target) + 1);
+  }
+  const pending = [...taskIds].filter((id) => indegree.get(id) === 0)
+    .sort((left, right) => left.localeCompare(right));
+  const distances = new Map([...taskIds].map((id) => [id, 1]));
+  const predecessors = new Map();
+  const topologicalOrder = [];
+  for (let index = 0; index < pending.length; index += 1) {
+    const id = pending[index];
+    topologicalOrder.push(id);
+    const dependents = [...adjacency.get(id)].sort((left, right) => left.localeCompare(right));
+    for (const dependent of dependents) {
+      const candidateDistance = distances.get(id) + 1;
+      if (candidateDistance > distances.get(dependent)) {
+        distances.set(dependent, candidateDistance);
+        predecessors.set(dependent, id);
+      }
+      indegree.set(dependent, indegree.get(dependent) - 1);
+      if (indegree.get(dependent) === 0) pending.push(dependent);
+    }
+  }
+  const longestEnd = topologicalOrder.reduce((best, id) =>
+    distances.get(id) > distances.get(best) ? id : best, topologicalOrder[0]);
+  if (!longestEnd || distances.get(longestEnd) < 2) {
+    return { taskIds: [], excludedCycleCount: cyclicIds.size };
+  }
+  const taskPath = [];
+  for (let id = longestEnd; id; id = predecessors.get(id)) taskPath.push(id);
+  taskPath.reverse();
+  return { taskIds: taskPath, excludedCycleCount: cyclicIds.size };
+}
 
 export function createGraphView(snapshot) {
   const graph = snapshot?.dependencyGraph;
@@ -14,6 +88,14 @@ export function createGraphView(snapshot) {
   }
   const tasks = new Map(snapshot.tasks.map((task) => [task.id, task]));
   const cyclicIds = new Set(graph.cyclicTaskIds);
+  const workflow = getWorkflowSummary(snapshot.tasks, snapshot.config);
+  const longestChain = findLongestDependencyChain(graph);
+  const readyIds = new Set(workflow.readyTaskIds);
+  const blockedIds = new Set(workflow.blockedTaskIds);
+  const reviewIds = new Set(workflow.reviewTaskIds);
+  const criticalPathIds = new Set(longestChain.taskIds);
+  const criticalPathEdges = new Set(longestChain.taskIds.slice(1)
+    .map((id, index) => JSON.stringify([longestChain.taskIds[index], id])));
   const nodes = graph.nodes.map(({ id }) => {
     const task = tasks.get(id);
     if (!task) throw new TypeError(`Graph task "${id}" is missing from the board.`);
@@ -32,6 +114,8 @@ export function createGraphView(snapshot) {
       dates: presentation.lifecycleDates,
       blockedBy: [...(task.dependencyView?.blockedBy ?? [])],
       hasCycle: cyclicIds.has(id),
+      workflowState: getDependencyReadiness(task, snapshot.config),
+      isCriticalPath: criticalPathIds.has(id),
       unresolved: false,
     };
   });
@@ -46,6 +130,7 @@ export function createGraphView(snapshot) {
       id, title: `${id}: Unresolved reference`, summary: "Unresolved reference",
       status: "Unresolved", priority: "", priorityTone: "", category: "", area: "",
       executionType: "", details: [], dates: [], blockedBy: [], hasCycle: false, unresolved: true,
+      workflowState: "unresolved", isCriticalPath: false,
     });
   }
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -58,6 +143,7 @@ export function createGraphView(snapshot) {
       target,
       unresolved: Boolean(unresolved),
       blocking: byId.get(target).blockedBy.includes(source),
+      isCriticalPath: criticalPathEdges.has(JSON.stringify([source, target])),
     };
   }).sort((left, right) =>
     left.source.localeCompare(right.source) || left.target.localeCompare(right.target));
@@ -67,6 +153,11 @@ export function createGraphView(snapshot) {
     taskCount: tasks.size,
     unresolvedCount: graph.unresolvedIds.length,
     cycleCount: graph.cyclicTaskIds.length,
+    workflow: {
+      ...workflow,
+      longestChainIds: longestChain.taskIds,
+      excludedCycleCount: longestChain.excludedCycleCount,
+    },
   };
 }
 

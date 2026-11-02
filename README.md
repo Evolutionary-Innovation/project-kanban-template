@@ -10,7 +10,7 @@ A GitHub repository template for a small, Markdown-backed Kanban canvas. Copy it
 - Configurable Created Date and Completion Date lifecycle fields, latest-completion tracking, manual corrections, and date sorting.
 - Scannable cards with `ID: Title` titles, lifecycle metadata, and separately labeled Details/configured fields.
 - Cross-source `Depends On` links with derived blocker state, cycle validation, dependency-aware search/filters, and graph-ready data.
-- A secondary whole-project dependency graph with locally bundled SVG layout, unresolved/cycle warnings, a task inspector, keyboard navigation, zoom controls, and an accessible relationship list.
+- A secondary dependency graph with shared filters, focus/expansion, cross-view navigation, unresolved/cycle warnings, derived dependency readiness, downstream impact, and the longest unweighted dependency chain.
 - Configured `Execution Type` choices as passive metadata; the board does not launch agents or trigger work from status changes.
 - Markdown as the only task source of truth.
 - Revision checks, exclusive write locking, atomic file replacement, file-mode preservation, validation, and HTTP 409 conflict handling.
@@ -33,7 +33,9 @@ A GitHub repository template for a small, Markdown-backed Kanban canvas. Copy it
 
 To try the board with representative browser-test data, run `node examples/synthetic-browser-project/serve.mjs` and open the loopback URL it prints. The fixture records are fictional and do not alter the template's actual task registers.
 
-Kanban remains the default editing interface. Choose **Dependencies** for a read-only whole-project overview, including isolated tasks. Arrows run from prerequisite to dependent; unresolved IDs become diagnostic placeholders. Select a node to inspect full metadata and direct relationships, or use the accessible task list. Use Fit graph, zoom controls, and the scrollable diagram to explore larger boards. Board search/filter settings are retained but apply only in Kanban in this first graph stage. Focus mode, cross-view task linking, and graph-launched editing are deferred; no Ready state or automatic execution is introduced.
+Kanban remains the default editing interface. Choose **Dependencies** for a read-only graph overview, including isolated tasks. Shared search and filters apply in both views; matching tasks remain distinct from prerequisite context. Focus a task to inspect its direct neighbourhood, then optionally expand upstream or downstream paths. The graph inspector shows unique downstream impact, and the graph highlights the longest unweighted chain with cycle tasks excluded. This is structural information, not a duration-based critical path.
+
+Dependency readiness is derived from completion and dependency state, is advisory only, and never changes status or authorizes execution. Graph-launched edits use the existing Kanban editor and persistence transaction. No task automation is introduced.
 
 The graph uses a pinned, locally served MIT-licensed Dagre distribution in a same-origin layout worker; opening the board requires no package installation or CDN access. See the [vendor inventory and update procedure](.github/extensions/project-kanban/vendor/README.md).
 

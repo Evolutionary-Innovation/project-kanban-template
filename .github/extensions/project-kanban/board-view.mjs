@@ -36,6 +36,59 @@ export function filterTasks(tasks, config, criteria) {
   return tasks.filter((task) => matchesTaskView(task, config, criteria));
 }
 
+export function getDependencyReadiness(task, config) {
+  if (!task || typeof task !== "object" || !config || typeof config !== "object") {
+    throw new TypeError("A task and board configuration are required.");
+  }
+  if (config.completionStatus && task.status === config.completionStatus) return "complete";
+  if (task.dependencyView?.isBlocked) return "blocked";
+  if (task.dependencyView?.hasCycle) return "review";
+  return "ready";
+}
+
+export function getWorkflowSummary(tasks, config) {
+  if (!Array.isArray(tasks) || !config || typeof config !== "object") {
+    throw new TypeError("Tasks and board configuration are required.");
+  }
+  const summary = {
+    activeTaskCount: 0,
+    readyCount: 0,
+    blockedCount: 0,
+    reviewCount: 0,
+    cycleCount: 0,
+    unresolvedCount: 0,
+    readyTaskIds: [],
+    blockedTaskIds: [],
+    reviewTaskIds: [],
+    cycleTaskIds: [],
+    unresolvedTaskIds: [],
+  };
+  for (const task of tasks) {
+    const readiness = getDependencyReadiness(task, config);
+    if (readiness === "complete") continue;
+    summary.activeTaskCount += 1;
+    if (readiness === "ready") {
+      summary.readyCount += 1;
+      summary.readyTaskIds.push(task.id);
+    } else if (readiness === "blocked") {
+      summary.blockedCount += 1;
+      summary.blockedTaskIds.push(task.id);
+    } else {
+      summary.reviewCount += 1;
+      summary.reviewTaskIds.push(task.id);
+    }
+    if (task.dependencyView?.hasCycle) {
+      summary.cycleCount += 1;
+      summary.cycleTaskIds.push(task.id);
+    }
+    if (task.dependencyView?.hasUnresolved) {
+      summary.unresolvedCount += 1;
+      summary.unresolvedTaskIds.push(task.id);
+    }
+  }
+  return summary;
+}
+
 export function formatCardTitle(task, source) {
   let title = task.title.trim();
   const taskTitlePrefix = `${task.id}:`;

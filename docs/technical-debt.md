@@ -8,7 +8,11 @@ Record known limitations, their impact, and the preferred remediation. Priority 
 
 The secondary graph's pinned Dagre layout runs in a worker so layout does not block Kanban. Chromium verification covered the 60-task fixture and 250-task graphs (744 chain edges and 690 wide-rank edges). A synthetic 1,000-task/2,994-edge deep chain exceeds Dagre's browser call-stack limit. This is a topology-dependent limitation, not a supported fixed task-count ceiling.
 
-The UI reports the failure explicitly and retains the fresh snapshot's accessible relationship list; users can return to Kanban without altering tasks. Do not silently truncate the graph or rewrite dependencies to avoid this failure. Reassess deeper-layout support, a newer engine, or ELK only against representative project demand and benchmarks. Shared graph filtering and focus mode remain Stage 2 work rather than an implicit fallback implemented here.
+The UI reports the failure explicitly and retains the fresh snapshot's accessible relationship list; users can return to Kanban without altering tasks. Do not silently truncate the graph or rewrite dependencies to avoid this failure. Reassess deeper-layout support, a newer engine, or ELK only against representative project demand and benchmarks. Shared graph filtering and focus mode are implemented in Stage 2; they do not bypass the layout limit.
+
+### Duration-based critical path
+
+The schema has no task-duration estimates, so workflow intelligence can show only an unweighted longest dependency chain. Do not label it as a schedule critical path. Add duration fields or scheduling constraints only after a separate schema and migration decision based on real project needs.
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->

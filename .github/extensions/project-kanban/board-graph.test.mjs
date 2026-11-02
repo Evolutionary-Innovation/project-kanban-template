@@ -7,6 +7,8 @@ import { readBoardConfig } from "./board-config.mjs";
 import { analyzeDependencies } from "./board-dependencies.mjs";
 import {
   createGraphView,
+  findLongestDependencyChain,
+  getDownstreamTaskIds,
   graphLayoutKey,
   graphTitleLines,
   layoutGraph,
@@ -64,10 +66,40 @@ test("projects all synthetic tasks, unresolved placeholders and cycle warnings w
   for (const edge of model.edges) {
     assert.equal(edge.blocking, snapshot.tasks.find(({ id }) => id === edge.target).dependencyView.blockedBy.includes(edge.source));
   }
+  assert.ok(model.nodes.some(({ workflowState }) => workflowState === "ready"));
+  assert.ok(model.nodes.some(({ workflowState }) => workflowState === "blocked"));
+  assert.ok(model.workflow.longestChainIds.length >= 2);
+  for (let index = 1; index < model.workflow.longestChainIds.length; index += 1) {
+    assert.ok(model.edges.some(({ source, target, isCriticalPath }) =>
+      source === model.workflow.longestChainIds[index - 1] &&
+      target === model.workflow.longestChainIds[index] && isCriticalPath));
+  }
   const result = layoutGraph(model, dagre);
   assertLayout(model, result);
   assert.deepEqual(result, layoutGraph(model, dagre));
   assert.equal(JSON.stringify(snapshot), before);
+});
+
+test("derives unique downstream impact and an unweighted chain while excluding cycles", () => {
+  const graph = {
+    nodes: ["A", "B", "C", "D", "E", "F"].map((id) => ({ id })),
+    edges: [
+      { source: "A", target: "B" },
+      { source: "B", target: "C" },
+      { source: "A", target: "D" },
+      { source: "D", target: "E" },
+      { source: "E", target: "D" },
+      { source: "E", target: "F" },
+    ],
+    cyclicTaskIds: ["D", "E"],
+  };
+  assert.deepEqual(findLongestDependencyChain(graph), {
+    taskIds: ["A", "B", "C"],
+    excludedCycleCount: 2,
+  });
+  assert.deepEqual(getDownstreamTaskIds(graph, "D"), ["E", "F"]);
+  assert.deepEqual(getDownstreamTaskIds(graph, "missing"), []);
+  assert.throws(() => findLongestDependencyChain({ nodes: [], edges: [] }), /cycle diagnostics/);
 });
 
 test("projects shared filters, dependency context, focus paths and temporary reveals", async () => {

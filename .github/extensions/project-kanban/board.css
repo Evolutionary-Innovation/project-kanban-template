@@ -7,6 +7,53 @@
   text-rendering: optimizeLegibility;
 }
 
+.graph-workflow {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid #d3e1e3;
+  border-radius: 12px;
+  background: #f7faf9;
+}
+
+.graph-workflow h3,
+.graph-workflow h4 {
+  margin: 0 0 8px;
+}
+
+.graph-workflow p {
+  margin: 6px 0;
+  color: #536b76;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.graph-workflow dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px 14px;
+  margin: 0 0 12px;
+}
+
+.graph-workflow dt {
+  color: #536b76;
+  font-size: 0.7rem;
+}
+
+.graph-workflow dd {
+  margin: 0;
+  color: #294c5c;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.graph-workflow .critical-chain {
+  padding-top: 10px;
+  border-top: 1px solid #dce6e6;
+  color: #68479a;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -277,6 +324,11 @@ h1 span {
   stroke-width: 2.5;
 }
 
+.graph-edge.is-critical-path {
+  stroke: #68479a;
+  stroke-width: 3;
+}
+
 .graph-edge.is-unresolved {
   stroke-dasharray: 6 4;
 }
@@ -301,6 +353,11 @@ h1 span {
 
 .graph-node[data-priority-tone="low"] rect {
   stroke: #528b86;
+}
+
+.graph-node.is-critical-path rect {
+  stroke: #68479a;
+  stroke-width: 4px;
 }
 
 .graph-node.is-unresolved rect {
@@ -793,6 +850,14 @@ h1 span {
 .card-relationship-row.dependency-warning .card-relationship-label,
 .card-relationship-row.dependency-warning .card-relationship-value {
   color: #a3423e;
+}
+
+.card-relationship-row.dependency-blocker {
+  padding: 5px 7px;
+  border-left: 3px solid #d6a048;
+  border-radius: 4px;
+  background: #fff7eb;
+  color: #855215;
 }
 
 .card-lifecycle {

@@ -1,4 +1,10 @@
-import { createGraphView, graphLayoutKey, graphTitleLines, projectGraphView } from "./board-graph.mjs";
+import {
+  createGraphView,
+  getDownstreamTaskIds,
+  graphLayoutKey,
+  graphTitleLines,
+  projectGraphView,
+} from "./board-graph.mjs";
 
 const svgNamespace = "http://www.w3.org/2000/svg";
 
@@ -16,6 +22,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   const taskList = root.querySelector("#graph-task-list");
   const warnings = root.querySelector("#graph-warnings");
   const message = root.querySelector("#graph-message");
+  const workflowSummary = root.querySelector("#graph-workflow-summary");
+  const criticalChain = root.querySelector("#graph-critical-chain");
   const wholeProjectButton = root.querySelector("#graph-whole-project");
   const errorPanel = root.querySelector("#graph-error");
   const errorMessage = root.querySelector("#graph-error-message");
@@ -78,8 +86,17 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   }
 
   function nodeLabel(node) {
+    const workflowLabel = {
+      ready: "Dependency-ready, advisory",
+      blocked: "Blocked by dependencies",
+      review: "Cycle needs review",
+      complete: "Complete",
+      unresolved: "Unresolved dependency reference",
+    }[node.workflowState];
     return [
       node.title, node.status, node.priority, node.category, node.area,
+      workflowLabel,
+      ...(node.isCriticalPath ? ["On the longest unweighted dependency chain"] : []),
       ...(node.matchKind === "context" ? ["Dependency context outside active filters"] : []),
       ...(node.matchKind === "revealed" ? ["Temporarily revealed outside active filters"] : []),
       ...(node.blockedBy.length ? [`Blocked by ${node.blockedBy.join(", ")}`] : []),
@@ -172,11 +189,18 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       inspector.append(actions);
     }
     const metadata = document.createElement("dl");
+    const workflowLabels = {
+      ready: "Dependency-ready (advisory)",
+      blocked: "Blocked by dependencies",
+      review: "Cycle needs review",
+      complete: "Complete",
+      unresolved: "Unresolved reference",
+    };
     for (const [label, value] of [
       ["Status", node.status], ["Priority", node.priority], ["Category", node.category],
       ["Area", node.area], ["Execution Type", node.executionType],
+      ["Dependency readiness", workflowLabels[node.workflowState]],
       ...node.dates.map(({ label, value }) => [label, value]),
-      ...(!node.unresolved ? [["Dependencies", node.blockedBy.length ? "Blocked" : "Dependency-unblocked"]] : []),
     ]) {
       if (!value) continue;
       const term = document.createElement("dt");
@@ -186,6 +210,31 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       metadata.append(term, detail);
     }
     inspector.append(metadata);
+    if (!node.unresolved) {
+      const downstreamIds = getDownstreamTaskIds(latestSnapshot.dependencyGraph, node.id);
+      const workflow = document.createElement("section");
+      const workflowHeading = document.createElement("h4");
+      const readiness = document.createElement("p");
+      const downstream = document.createElement("p");
+      workflowHeading.textContent = "Workflow intelligence";
+      readiness.textContent = node.workflowState === "ready"
+        ? "Dependency-ready: all prerequisites are complete and resolved."
+        : node.workflowState === "blocked"
+          ? `Blocked by ${node.blockedBy.length} prerequisite${node.blockedBy.length === 1 ? "" : "s"}.`
+          : node.workflowState === "review"
+            ? "Dependency cycle requires review before this work is considered ready."
+            : "This task is complete.";
+      downstream.textContent = downstreamIds.length
+        ? `Downstream impact: ${downstreamIds.length} unique dependent task${downstreamIds.length === 1 ? "" : "s"}.`
+        : "Downstream impact: no dependent tasks.";
+      workflow.append(workflowHeading, readiness, downstream);
+      if (node.isCriticalPath) {
+        const pathNote = document.createElement("p");
+        pathNote.textContent = "Part of the longest unweighted dependency chain; this is not a duration-based critical path.";
+        workflow.append(pathNote);
+      }
+      inspector.append(workflow);
+    }
     if (node.hasCycle || node.unresolved) {
       const warning = document.createElement("p");
       warning.className = "graph-warning-text";
@@ -268,7 +317,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       const layoutEdge = edgePositions.get(JSON.stringify([edge.source, edge.target]));
       const path = svgElement("path", {
         d: layoutEdge.points.map(({ x, y }, index) => `${index ? "L" : "M"} ${x} ${y}`).join(" "),
-        class: `graph-edge${edge.blocking ? " is-blocking" : ""}${edge.unresolved ? " is-unresolved" : ""}`,
+        class: `graph-edge${edge.blocking ? " is-blocking" : ""}${edge.unresolved ? " is-unresolved" : ""}` +
+          `${edge.isCriticalPath ? " is-critical-path" : ""}`,
         "marker-end": "url(#dependency-arrow)",
         "data-source": edge.source,
         "data-target": edge.target,
@@ -283,7 +333,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         transform: `translate(${position.x - position.width / 2} ${position.y - position.height / 2})`,
         class: `graph-node${node.unresolved ? " is-unresolved" : ""}${node.hasCycle ? " has-cycle" : ""}` +
           `${node.matchKind === "context" ? " is-context" : ""}` +
-          `${node.matchKind === "revealed" ? " is-revealed" : ""}`,
+          `${node.matchKind === "revealed" ? " is-revealed" : ""}` +
+          `${node.isCriticalPath ? " is-critical-path" : ""}`,
         "data-task-id": node.id,
         "data-priority-tone": node.priorityTone,
         role: "button", tabindex: node.id === focusedId ? 0 : -1,
@@ -362,6 +413,29 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     }
   }
 
+  function renderWorkflowSummary() {
+    workflowSummary.replaceChildren();
+    const labels = [
+      ["Dependency-ready", model.workflow.readyCount],
+      ["Blocked work", model.workflow.blockedCount],
+      ["Cycle tasks", model.workflow.cycleCount],
+      ["Tasks with unresolved blockers", model.workflow.unresolvedCount],
+    ];
+    for (const [label, value] of labels) {
+      const term = document.createElement("dt");
+      const detail = document.createElement("dd");
+      term.textContent = label;
+      detail.textContent = String(value);
+      workflowSummary.append(term, detail);
+    }
+    criticalChain.textContent = model.workflow.longestChainIds.length
+      ? model.workflow.longestChainIds.join(" -> ")
+      : "No resolved multi-task dependency chain is available.";
+    if (model.workflow.excludedCycleCount > 0) {
+      criticalChain.textContent += ` (${model.workflow.excludedCycleCount} cycle tasks excluded)`;
+    }
+  }
+
   function fail(text, view = null) {
     generation += 1;
     stopLayout();
@@ -371,7 +445,10 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     diagram.replaceChildren();
     taskList.replaceChildren();
     warnings.replaceChildren();
-    if (model) renderLists();
+    if (model) {
+      renderLists();
+      renderWorkflowSummary();
+    }
     renderInspector();
     errorMessage.textContent = text;
     errorPanel.hidden = false;
@@ -426,6 +503,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       for (const control of viewportControls) control.disabled = model.nodes.length === 0;
       drawDiagram();
       renderLists();
+      renderWorkflowSummary();
       renderInspector();
       if (needsLayout) fit();
       else setZoom(zoom);

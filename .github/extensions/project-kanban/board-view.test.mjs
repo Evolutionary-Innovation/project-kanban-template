@@ -9,6 +9,8 @@ import {
   filterTasks,
   formatCardTitle,
   getCardPresentation,
+  getDependencyReadiness,
+  getWorkflowSummary,
   hasActiveTaskFilters,
   isManualOrderView,
   sortTasks,
@@ -16,13 +18,13 @@ import {
 
 const fixtureRoot = fileURLToPath(new URL("../../../examples/synthetic-browser-project/", import.meta.url));
 
-async function loadFixture() {
-  const config = await readBoardConfig(fixtureRoot);
+async function loadFixture(root = fixtureRoot) {
+  const config = await readBoardConfig(root);
   const documents = Object.fromEntries(
     await Promise.all(
       config.sources.map(async (source) => [
         source.path,
-        await readFile(`${fixtureRoot}/${source.path}`, "utf8"),
+        await readFile(`${root}/${source.path}`, "utf8"),
       ]),
     ),
   );
@@ -73,6 +75,40 @@ test("searches dependency references and filters blocked, unresolved, and cyclic
   assert.ok(filterTasks(board.tasks, board.config, { dependency: "cycle" }).some(({ id }) => id === cyclic.id));
   assert.ok(filterTasks(board.tasks, board.config, { search: unresolved.dependencyView.unresolved[0] })
     .some(({ id }) => id === unresolved.id));
+});
+
+test("derives dependency readiness without changing configured status or persistence", async () => {
+  const board = await loadFixture();
+  const summary = getWorkflowSummary(board.tasks, board.config);
+  const activeCount = board.tasks.filter(({ status }) => status !== board.config.completionStatus).length;
+  assert.equal(summary.activeTaskCount, activeCount);
+  assert.equal(summary.readyCount + summary.blockedCount + summary.reviewCount, activeCount);
+  assert.ok(summary.readyCount > 0);
+  assert.ok(summary.blockedCount > 0);
+  assert.ok(summary.cycleCount > 0);
+  assert.ok(summary.unresolvedCount > 0);
+
+  for (const id of summary.readyTaskIds) {
+    const task = board.tasks.find((candidate) => candidate.id === id);
+    assert.equal(getDependencyReadiness(task, board.config), "ready");
+    assert.equal(task.dependencyView.isBlocked, false);
+    assert.equal(task.dependencyView.hasCycle, false);
+  }
+  for (const id of summary.blockedTaskIds) {
+    assert.equal(board.tasks.find((candidate) => candidate.id === id).dependencyView.isBlocked, true);
+  }
+
+  const independentRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
+  const independent = await loadFixture(independentRoot);
+  const independentSummary = getWorkflowSummary(independent.tasks, independent.config);
+  assert.equal(independent.config.completionStatus, "Done");
+  assert.equal(getDependencyReadiness(
+    { ...independent.tasks[0], status: independent.config.completionStatus },
+    independent.config,
+  ), "complete");
+  assert.equal(independentSummary.activeTaskCount,
+    independent.tasks.filter(({ status }) => status !== independent.config.completionStatus).length);
+  assert.throws(() => getWorkflowSummary({}, independent.config), /Tasks and board configuration/);
 });
 
 test("sorts without mutating canonical order and keeps blank dates last", async () => {

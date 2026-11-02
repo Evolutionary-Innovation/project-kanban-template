@@ -9,6 +9,7 @@ The template's task state is maintained in the table below. See [architecture](a
 - Search, combined filters, per-column view sorting, card collapse, and a visible status footer; UX checks use an isolated synthetic project.
 - Configured completion dates and per-source non-reusable ID sequences, persisted through the existing Markdown transaction.
 - A secondary read-only dependency graph with shared filters, explicit dependency-neighbourhood focus/expansion, board linking, graph-launched editing through the existing editor, cycle/unresolved warnings, zoom controls and an accessible relationship list.
+- Derived workflow intelligence for dependency readiness, blocked work, unresolved/cycle diagnostics, unique downstream impact, and the longest unweighted dependency chain. No schema or execution automation was added.
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->

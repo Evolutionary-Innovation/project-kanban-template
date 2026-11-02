@@ -3,6 +3,7 @@ import {
   compareCanonicalTaskOrder,
   filterTasks,
   getCardPresentation,
+  getWorkflowSummary,
   hasActiveTaskFilters,
   isManualOrderView,
   matchesTaskView,
@@ -91,19 +92,23 @@ function updateBoardSummary() {
     orderingHint.hidden = true;
     return;
   }
+  const matchingTasks = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState);
+  const workflow = getWorkflowSummary(matchingTasks, boardSnapshot.config);
+  const workflowSummary =
+    `${workflow.readyCount} dependency-ready · ${workflow.blockedCount} blocked · ${workflow.cycleCount} cycle tasks`;
   if (activeView === "graph") {
-    const matchingCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
-    boardStatistics.textContent = `${matchingCount} of ${boardSnapshot.tasks.length} tasks match the shared filters`;
+    boardStatistics.textContent =
+      `${matchingTasks.length} of ${boardSnapshot.tasks.length} tasks match the shared filters · ${workflowSummary}`;
     orderingHint.hidden = true;
     return;
   }
-  const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
   const revealedTask = viewState.revealedTaskId &&
     boardSnapshot.tasks.find(({ id }) => id === viewState.revealedTaskId);
   const revealNote = revealedTask && !matchesTaskView(revealedTask, boardSnapshot.config, viewState)
     ? `; 1 temporarily shown outside filters (${revealedTask.id})`
     : "";
-  boardStatistics.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks match${revealNote}`;
+  boardStatistics.textContent =
+    `${matchingTasks.length} of ${boardSnapshot.tasks.length} tasks match${revealNote} · ${workflowSummary}`;
   orderingHint.hidden = !hasActiveFilters() && !boardSnapshot.config.statuses.some(
     (status) => (sortByStatus.get(status) ?? "manual") !== "manual",
   );
@@ -261,7 +266,9 @@ function renderCard(task, index, cardCount, temporarilyRevealed = false) {
       const row = document.createElement("div");
       row.className = relationship.label === "Dependency warning"
         ? "card-relationship-row dependency-warning"
-        : "card-relationship-row";
+        : relationship.label === "Blocked By"
+          ? "card-relationship-row dependency-blocker"
+          : "card-relationship-row";
       const label = document.createElement("span");
       label.className = "card-relationship-label";
       label.textContent = relationship.label;

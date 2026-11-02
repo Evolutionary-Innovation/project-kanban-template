@@ -53,6 +53,16 @@
           Area
           <select id="area-filter"><option value="">All areas</option></select>
         </label>
+        <label class="view-field">
+          Dependencies
+          <select id="dependency-filter">
+            <option value="">All dependencies</option>
+            <option value="blocked">Blocked</option>
+            <option value="unblocked">Unblocked</option>
+            <option value="unresolved">Unresolved references</option>
+            <option value="cycle">Dependency cycles</option>
+          </select>
+        </label>
         <div class="view-actions">
           <button id="clear-filters" class="secondary-button" type="button">Clear</button>
           <button id="collapse-all" class="secondary-button" type="button">Collapse all</button>

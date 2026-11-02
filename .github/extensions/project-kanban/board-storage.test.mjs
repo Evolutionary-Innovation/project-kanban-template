@@ -235,6 +235,63 @@ test("keeps creation and latest completion dates independent across the task lif
   );
 });
 
+test("persists cross-source dependencies and rejects edits that introduce cycles", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  let board = await readBoardSnapshot(root, config);
+  const roadmapTask = board.tasks.find(({ id }) => id.startsWith("RM-"));
+  const debtTask = board.tasks.find(({ id }) => id.startsWith("TD-"));
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: roadmapTask.id,
+    updates: { dependsOn: debtTask.id },
+    revisions: board.revisions,
+  });
+  let dependent = board.tasks.find(({ id }) => id === roadmapTask.id);
+  assert.deepEqual(dependent.dependencyView.dependsOn, [debtTask.id]);
+  assert.deepEqual(dependent.dependencyView.blockedBy, [debtTask.id]);
+
+  await assert.rejects(
+    editTaskInDocuments(root, config, {
+      taskId: debtTask.id,
+      updates: { dependsOn: roadmapTask.id },
+      revisions: board.revisions,
+    }),
+    (error) => error instanceof BoardStorageError && error.code === "board_dependency_cycle",
+  );
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: roadmapTask.id,
+    updates: { dependsOn: "RA-999" },
+    revisions: board.revisions,
+  });
+  dependent = board.tasks.find(({ id }) => id === roadmapTask.id);
+  assert.deepEqual(dependent.dependencyView.unresolved, ["RA-999"]);
+  assert.equal(dependent.dependencyView.isBlocked, true);
+});
+
+test("rejects malformed, duplicate, and self-referential dependencies on task creation", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  const board = await readBoardSnapshot(root, config);
+  const baseTask = {
+    title: "Validate a new dependency",
+    area: "Testing",
+    priority: "High",
+    status: "Planned",
+    details: "",
+  };
+
+  for (const dependsOn of ["XX-001", "RM-001, RM-001", "RM-003"]) {
+    await assert.rejects(
+      createTaskInDocuments(root, config, {
+        sourceType: "roadmap",
+        task: { ...baseTask, dependsOn },
+        revisions: board.revisions,
+      }),
+      (error) => error instanceof BoardStorageError && error.code === "board_input_invalid",
+    );
+  }
+});
+
 test("uses the independent project's configured IDs, statuses, and required extra fields", async (t) => {
   const exampleRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
   const { root, config } = await createWorkspace(t, exampleRoot);

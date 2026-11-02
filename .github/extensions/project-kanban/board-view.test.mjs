@@ -7,6 +7,7 @@ import { parseBoardDocuments } from "./board-data.mjs";
 import {
   calculateOrderValue,
   filterTasks,
+  formatCardTitle,
   getCardPresentation,
   hasActiveTaskFilters,
   isManualOrderView,
@@ -56,6 +57,21 @@ test("combines source, priority, category, area, and search filters with AND", a
   assert.equal(isManualOrderView({}, "manual"), true);
 });
 
+test("searches dependency references and filters blocked, unresolved, and cyclic tasks", async () => {
+  const board = await loadFixture();
+  const blocked = board.tasks.find(({ dependencyView }) => dependencyView?.isBlocked);
+  const unresolved = board.tasks.find(({ dependencyView }) => dependencyView?.hasUnresolved);
+  const cyclic = board.tasks.find(({ dependencyView }) => dependencyView?.hasCycle);
+  assert.ok(blocked);
+  assert.ok(unresolved);
+  assert.ok(cyclic);
+  assert.ok(filterTasks(board.tasks, board.config, { dependency: "blocked" }).some(({ id }) => id === blocked.id));
+  assert.ok(filterTasks(board.tasks, board.config, { dependency: "unresolved" }).some(({ id }) => id === unresolved.id));
+  assert.ok(filterTasks(board.tasks, board.config, { dependency: "cycle" }).some(({ id }) => id === cyclic.id));
+  assert.ok(filterTasks(board.tasks, board.config, { search: unresolved.dependencyView.unresolved[0] })
+    .some(({ id }) => id === unresolved.id));
+});
+
 test("sorts without mutating canonical order and keeps blank dates last", async () => {
   const board = await loadFixture();
   const originalIds = board.columns.find(({ status }) => status === "Complete").cards.map(({ id }) => id);
@@ -70,6 +86,12 @@ test("sorts without mutating canonical order and keeps blank dates last", async 
   assert.deepEqual(
     categorySorted.map(({ category }) => category),
     [...categorySorted].map(({ category }) => category).sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: "base" })),
+  );
+  const areaSorted = sortTasks(complete, board.config, "area");
+  assert.deepEqual(
+    areaSorted.map(({ area }) => area),
+    [...areaSorted].map(({ area }) => area).sort((left, right) =>
       left.localeCompare(right, undefined, { sensitivity: "base" })),
   );
   const typeSorted = sortTasks(complete, board.config, "type");
@@ -103,7 +125,7 @@ test("builds generic card sections, lifecycle labels, and collapsed visibility",
   const unknownComplete = board.tasks.find(({ id }) => id === "RA-008");
 
   const completedView = getCardPresentation(completed, board.config);
-  assert.equal(completedView.showSourceId, false);
+  assert.equal(completedView.title, "TD-03: Strengthen reliability checks around file writes");
   assert.deepEqual(completedView.lifecycleDates, [
     { label: "Completed", value: completed.completionDate },
   ]);
@@ -114,6 +136,7 @@ test("builds generic card sections, lifecycle labels, and collapsed visibility",
     "Rationale",
     "Recommendations",
   ]);
+  assert.deepEqual(completedView.relationshipSections, []);
 
   const activeView = getCardPresentation(active, board.config, true);
   assert.equal(activeView.detailsHidden, true);
@@ -131,6 +154,49 @@ test("builds generic card sections, lifecycle labels, and collapsed visibility",
   assert.equal(getCardPresentation(active, board.config).detailsHidden, false);
   assert.deepEqual(getCardPresentation(unknownActive, board.config).lifecycleDates, []);
   assert.deepEqual(getCardPresentation(unknownComplete, board.config).lifecycleDates, []);
+
+  const relationshipView = getCardPresentation(
+    board.tasks.find(({ id }) => id === "RM-001"),
+    board.config,
+    true,
+  );
+  assert.equal(relationshipView.detailsHidden, true);
+  assert.deepEqual(relationshipView.relationshipSections, [
+    { label: "Depends On", value: "RM-002" },
+    { label: "Blocked By", value: "RM-002" },
+    { label: "Dependency warning", value: "Cycle detected" },
+  ]);
+  assert.deepEqual(
+    getCardPresentation(unknownActive, board.config).relationshipSections,
+    [
+      { label: "Depends On", value: "TD-999" },
+      { label: "Blocked By", value: "TD-999 (unresolved)" },
+    ],
+  );
+});
+
+test("formats card titles with one configured ID and without source/category prefixes", async () => {
+  const board = await loadFixture();
+  const technicalDebt = board.config.sources.find(({ key }) => key === "technicalDebt");
+  const roadmap = board.config.sources.find(({ key }) => key === "roadmap");
+  const audit = board.config.sources.find(({ key }) => key === "repositoryAudit");
+
+  assert.equal(
+    formatCardTitle({
+      id: "TD-03",
+      title: "Reliability: Strengthen reliability checks around file writes (TD-03)",
+      category: "Reliability",
+    }, technicalDebt),
+    "TD-03: Strengthen reliability checks around file writes",
+  );
+  assert.equal(
+    formatCardTitle({ id: "RM-019", title: "Roadmap: Returns tab" }, roadmap),
+    "RM-019: Returns tab",
+  );
+  assert.equal(
+    formatCardTitle({ id: "RA-005", title: "RA-005: Research/Audit: Verify architecture links (RA-005)" }, audit),
+    "RA-005: Verify architecture links",
+  );
 });
 
 test("calculates safe integer insertion orders and rejects impossible gaps", async () => {

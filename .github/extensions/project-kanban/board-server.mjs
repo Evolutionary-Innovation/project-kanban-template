@@ -21,7 +21,7 @@ function sendJson(response, status, body) {
 }
 
 function statusFor(error) {
-  if (error?.code === "board_input_invalid") return 400;
+  if (error?.code === "board_input_invalid" || error?.code === "board_dependency_cycle") return 400;
   if (error?.code === "board_revision_conflict" || error?.code === "board_write_busy") return 409;
   if (error?.code === "board_task_not_found") return 404;
   return 500;

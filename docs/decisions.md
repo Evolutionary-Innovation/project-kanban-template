@@ -37,3 +37,21 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Bump the task-table schema version, infer completion from a hard-coded status label, or store dates in browser state.
 - **Decision:** Keep `createdDate` and `completionDate` as independent, configured `date` extra fields on each source, and optionally configure `completionStatus`. Populate Created Date when configured on creation. Populate Completion Date on creation in the completion status or every transition into it (latest completion wins), retain it on reopen, and allow manual corrections. Do not infer historical dates.
 - **Consequences:** Schema v1 and Markdown persistence remain intact. Existing projects add the desired date fields to their configs and table headers; historical dates remain blank unless supported by evidence. Date changes use the existing revision-checked, locked, atomic write.
+
+## ADR-05: Store prerequisite links once and derive workflow projections
+
+- **Status:** Accepted
+- **Observations:** Tasks are owned by separate Markdown sources, IDs are stable and project-configured, and writes already reread all sources under one revision-checked lock. Persisting both `Depends On` and `Blocked By` would duplicate relationship state and make cross-file edits fragile.
+- **Assumptions:** A dependency can reference a task that has not been created yet, and projects may use ID prefixes, statuses, and source paths other than RM/TD/RA.
+- **Alternatives considered:** Store reciprocal blocker values, require every reference to resolve immediately, reject a board with any historical cycle, or add a task database/graph store.
+- **Decision:** Store only comma-separated task IDs in optional `Depends On` fields. Validate syntax, configured prefixes, duplicates, self-links, and cycles introduced by edits. Keep unresolved links visible. Derive incomplete/unresolved `Blocked By` values and a graph-ready projection with prerequisite-to-dependent edges. Flag existing cycles without making the source unreadable.
+- **Consequences:** Dependency edits use the existing all-source locked snapshot and persist only the edited task's owning Markdown file. Schema v1 remains the persistence contract; older tables load missing optional fields as blank and normalize on the next write. The graph projection can support a later DAG view without introducing a second relationship model.
+
+## ADR-06: Keep execution type descriptive
+
+- **Status:** Accepted
+- **Observations:** Future agent workflows must remain independent of model, provider, and harness churn. A status change is currently a user-controlled Markdown mutation.
+- **Assumptions:** Teams benefit from a compact indication of whether work is human-led, AI-assisted, or needs a decision, without authorizing automation.
+- **Alternatives considered:** Embed model/provider names, automatically claim tasks on In Progress, or execute work on a status transition.
+- **Decision:** Configure `Execution Type` as optional choice metadata only. It does not claim tasks, launch agents, alter dependencies, or trigger status changes.
+- **Consequences:** Metadata remains portable across execution tools. Automated task execution requires a separately reviewed workflow and conflict/authorization design.

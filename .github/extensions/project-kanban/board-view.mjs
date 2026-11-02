@@ -12,12 +12,21 @@ export function matchesTaskView(task, config, criteria) {
   if (criteria.priority && task.priority !== criteria.priority) return false;
   if (criteria.category && task.category !== criteria.category) return false;
   if (criteria.area && task.area !== criteria.area) return false;
+  const dependencies = task.dependencyView;
+  if (criteria.dependency === "blocked" && !dependencies?.isBlocked) return false;
+  if (criteria.dependency === "unblocked" && dependencies?.isBlocked) return false;
+  if (criteria.dependency === "unresolved" && !dependencies?.hasUnresolved) return false;
+  if (criteria.dependency === "cycle" && !dependencies?.hasCycle) return false;
   if (!criteria.search) return true;
 
   const searchableText = [
+    task.id,
     task.title,
     task.details,
     ...(source?.extraFields ?? []).map(({ key }) => task[key]),
+    ...(dependencies?.dependsOn ?? []),
+    ...(dependencies?.blockedBy ?? []),
+    ...(dependencies?.unresolved ?? []),
   ].join(" ");
   return normalizedText(searchableText).includes(normalizedText(criteria.search));
 }
@@ -26,16 +35,55 @@ export function filterTasks(tasks, config, criteria) {
   return tasks.filter((task) => matchesTaskView(task, config, criteria));
 }
 
+export function formatCardTitle(task, source) {
+  let title = task.title.trim();
+  const taskTitlePrefix = `${task.id}:`;
+  if (title.startsWith(taskTitlePrefix)) title = title.slice(taskTitlePrefix.length).trim();
+
+  const sourcePrefixes = [task.category, source?.label, source?.category]
+    .filter((prefix, index, prefixes) => prefix && prefixes.indexOf(prefix) === index)
+    .sort((left, right) => right.length - left.length);
+  for (const prefix of sourcePrefixes) {
+    const categoryPrefix = `${prefix}:`;
+    if (title.startsWith(categoryPrefix)) {
+      title = title.slice(categoryPrefix.length).trim();
+      break;
+    }
+  }
+
+  const duplicateIdSuffix = `(${task.id})`;
+  if (title.endsWith(duplicateIdSuffix)) {
+    title = title.slice(0, -duplicateIdSuffix.length).trimEnd();
+  }
+  return `${task.id}: ${title}`;
+}
+
 export function getCardPresentation(task, config, detailsCollapsed = false) {
   const source = sourceForTask(task, config);
   const detailSections = [];
   if (task.details.trim()) detailSections.push({ label: "Details", value: task.details });
   for (const field of source?.extraFields ?? []) {
-    if (field.key === "createdDate" || field.key === "completionDate") continue;
+    if (["createdDate", "completionDate", "dependsOn", "executionType"].includes(field.key)) continue;
     const value = task[field.key];
     if (typeof value === "string" && value.trim()) {
       detailSections.push({ label: field.label, value });
     }
+  }
+
+  const dependencyView = task.dependencyView ?? {};
+  const relationshipSections = [];
+  const dependsOn = dependencyView.dependsOn ?? [];
+  if (dependsOn.length > 0) {
+    relationshipSections.push({ label: "Depends On", value: dependsOn.join(", ") });
+  }
+  const unresolved = new Set(dependencyView.unresolved ?? []);
+  const blockedBy = (dependencyView.blockedBy ?? [])
+    .map((id) => unresolved.has(id) ? `${id} (unresolved)` : id);
+  if (blockedBy.length > 0) {
+    relationshipSections.push({ label: "Blocked By", value: blockedBy.join(", ") });
+  }
+  if (dependencyView.hasCycle) {
+    relationshipSections.push({ label: "Dependency warning", value: "Cycle detected" });
   }
 
   const isComplete = config.completionStatus !== undefined && task.status === config.completionStatus;
@@ -45,12 +93,13 @@ export function getCardPresentation(task, config, detailsCollapsed = false) {
         ...(task.createdDate ? [{ label: "Added", value: task.createdDate }] : []),
         ...(task.completionDate ? [{ label: "Last completed", value: task.completionDate }] : []),
       ];
-
   return {
+    detailSections,
     detailSections,
     detailsHidden: detailsCollapsed,
     lifecycleDates,
-    showSourceId: !task.title.startsWith(`${task.id}: `),
+    relationshipSections,
+    title: formatCardTitle(task, source),
   };
 }
 
@@ -60,7 +109,8 @@ export function hasActiveTaskFilters(criteria) {
       criteria.source ||
       criteria.priority ||
       criteria.category ||
-      criteria.area,
+      criteria.area ||
+      criteria.dependency,
   );
 }
 
@@ -132,6 +182,9 @@ export function sortTasks(tasks, config, sortBy = "manual") {
       canonical(left, right),
     category: (left, right) =>
       left.category.localeCompare(right.category, undefined, { sensitivity: "base" }) ||
+      canonical(left, right),
+    area: (left, right) =>
+      left.area.localeCompare(right.area, undefined, { sensitivity: "base" }) ||
       canonical(left, right),
     type: (left, right) =>
       (sourceOrder.get(left.source.document) ?? Number.MAX_SAFE_INTEGER) -

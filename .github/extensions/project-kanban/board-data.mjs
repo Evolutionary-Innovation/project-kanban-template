@@ -1,4 +1,9 @@
 import { getLegacyAdapter } from "./legacy-adapters.mjs";
+import {
+  analyzeDependencies,
+  normalizeDependencyIds,
+  parseDependencyIds,
+} from "./board-dependencies.mjs";
 
 export const TASK_SCHEMA_VERSION = 1;
 export const SCHEMA_HEADING = "## Kanban tasks";
@@ -129,13 +134,17 @@ function validateTask(task, source, config) {
     throw new Error(`${source.path}: ${task.id} has invalid Details.`);
   }
   for (const field of source.extraFields) {
-    const value = task[field.key];
+    const value = task[field.key] ?? "";
     if (
       typeof value !== "string" ||
       value.length > field.maxLength ||
-      (field.type === "date" && value !== "" && !isValidDateOnly(value))
+      (field.type === "date" && value !== "" && !isValidDateOnly(value)) ||
+      (field.choices && value !== "" && !field.choices.includes(value))
     ) {
       throw new Error(`${source.path}: ${task.id} has invalid ${field.label}.`);
+    }
+    if (field.type === "task-ids" && parseDependencyIds(value, config).includes(task.id)) {
+      throw new Error(`${source.path}: ${task.id} cannot depend on itself.`);
     }
   }
   return task;
@@ -157,7 +166,10 @@ function findSchemaTable(markdown, source, config) {
   if (tableLines.length < 2) throw new Error(`${source.path}: the task table is missing its header or separator.`);
   const headers = splitMarkdownRow(tableLines[0]);
   const normalizedHeaders = headers.map((header) => fieldName(header));
-  const requiredFields = [...TASK_COLUMNS.map(fieldName), ...source.extraFields.map(({ key }) => key)];
+  const requiredFields = [
+    ...TASK_COLUMNS.map(fieldName),
+    ...source.extraFields.filter(({ required }) => required).map(({ key }) => key),
+  ];
   for (const field of requiredFields) {
     if (!normalizedHeaders.includes(field)) {
       throw new Error(`${source.path}: the task table is missing the ${field} column.`);
@@ -187,7 +199,7 @@ function findSchemaTable(markdown, source, config) {
       details: values.details,
       source: { document: source.path, section: "Kanban tasks", schemaVersion: TASK_SCHEMA_VERSION },
     };
-    for (const field of source.extraFields) task[field.key] = values[field.key];
+    for (const field of source.extraFields) task[field.key] = values[field.key] ?? "";
     return validateTask(task, source, config);
   });
   return { headers, tasks };
@@ -201,14 +213,20 @@ function buildBoard(tasks, config) {
       (sourceOrder.get(left.source.document) ?? 0) - (sourceOrder.get(right.source.document) ?? 0) ||
       left.id.localeCompare(right.id),
   );
+  const dependencyAnalysis = analyzeDependencies(sortedTasks, config);
+  const projectedTasks = sortedTasks.map((task) => ({
+    ...task,
+    dependencyView: dependencyAnalysis.taskViews.get(task.id),
+  }));
   return {
-    tasks: sortedTasks,
+    tasks: projectedTasks,
     columns: config.statuses.map((status) => ({
       id: status.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
       title: status,
       status,
-      cards: sortedTasks.filter((task) => task.status === status),
+      cards: projectedTasks.filter((task) => task.status === status),
     })),
+    dependencyGraph: dependencyAnalysis.graph,
     sources: config.sources.map(({ path }) => path),
     config: {
       projectName: config.projectName,
@@ -281,40 +299,6 @@ export function hasCanonicalTaskTable(markdown, source, config) {
   return findSchemaTable(markdown, source, config) !== null;
 }
 
-function addConfiguredExtraFields(markdown, source, config) {
-  const lines = markdown.split(/\r?\n/);
-  const headingIndex = lines.findIndex((line) => line.trim() === SCHEMA_HEADING);
-  if (headingIndex === -1) throw new Error(`${source.path}: a canonical task table is required for migration.`);
-  const markerIndex = lines.findIndex(
-    (line, index) => index > headingIndex && line.trim() === config.schemaMarker,
-  );
-  if (markerIndex === -1) throw new Error(`${source.path}: the migrated task table has no schema marker.`);
-  let headerRow = markerIndex + 1;
-  while (headerRow < lines.length && !lines[headerRow].trim().startsWith("|")) headerRow += 1;
-  if (headerRow >= lines.length) throw new Error(`${source.path}: the migrated task table has no header.`);
-  const headers = splitMarkdownRow(lines[headerRow]);
-  const knownFields = new Set(headers.map(fieldName));
-  const missingFields = source.extraFields.filter(({ key }) => !knownFields.has(key));
-  if (missingFields.length === 0) return markdown;
-
-  const separatorRow = headerRow + 1;
-  const separator = splitMarkdownRow(lines[separatorRow]);
-  if (separator.length !== headers.length || !separator.every((cell) => /^:?-{3,}:?$/.test(cell))) {
-    throw new Error(`${source.path}: cannot add configured fields to an invalid task table.`);
-  }
-  const originalColumnCount = headers.length;
-  lines[headerRow] = formatMarkdownRow([...headers, ...missingFields.map(({ label }) => label)]);
-  lines[separatorRow] = formatMarkdownRow([...separator, ...missingFields.map(() => "---")]);
-  for (let index = separatorRow + 1; index < lines.length && lines[index].trim().startsWith("|"); index += 1) {
-    const cells = splitMarkdownRow(lines[index]);
-    if (cells.length !== originalColumnCount) {
-      throw new Error(`${source.path}: cannot add configured fields to a malformed task row.`);
-    }
-    lines[index] = formatMarkdownRow([...cells, ...missingFields.map(() => "")]);
-  }
-  return lines.join("\n");
-}
-
 function headerIndex(headers, key) {
   return headers.findIndex((header) => fieldName(header) === key);
 }
@@ -335,6 +319,37 @@ function tableLayout(markdown, source, config) {
   let insertionIndex = headerRow + 2;
   while (insertionIndex < limit && lines[insertionIndex].trim().startsWith("|")) insertionIndex += 1;
   return { lines, headers: schema.headers, headerRow, insertionIndex };
+}
+
+export function normalizeConfiguredTaskTable(markdown, source, config) {
+  const { lines, headers, headerRow, insertionIndex } = tableLayout(markdown, source, config);
+  const configuredHeaders = [
+    ...TASK_COLUMNS,
+    ...source.extraFields.map(({ label }) => label),
+  ];
+  const configuredKeys = new Set([
+    ...TASK_COLUMNS.map(fieldName),
+    ...source.extraFields.map(({ key }) => key),
+  ]);
+  const unconfiguredHeaders = headers.filter((header) => !configuredKeys.has(fieldName(header)));
+  const targetHeaders = [...configuredHeaders, ...unconfiguredHeaders];
+  if (headers.length === targetHeaders.length && headers.every((header, index) =>
+    fieldName(header) === fieldName(targetHeaders[index]))) {
+    return markdown;
+  }
+
+  const originalKeys = headers.map(fieldName);
+  lines[headerRow] = formatMarkdownRow(targetHeaders);
+  lines[headerRow + 1] = formatMarkdownRow(targetHeaders.map(() => "---"));
+  for (let rowIndex = headerRow + 2; rowIndex < insertionIndex; rowIndex += 1) {
+    const cells = splitMarkdownRow(lines[rowIndex]);
+    if (cells.length !== headers.length) {
+      throw new Error(`${source.path}: cannot normalize a malformed task row.`);
+    }
+    const values = new Map(originalKeys.map((key, index) => [key, cells[index]]));
+    lines[rowIndex] = formatMarkdownRow(targetHeaders.map((header) => values.get(fieldName(header)) ?? ""));
+  }
+  return lines.join("\n");
 }
 
 export function ensureTaskIdSequence(markdown, tasks, source, config) {
@@ -420,10 +435,12 @@ export function updateTaskRecord(markdown, taskId, updates, source, config) {
         typeof value !== "string" ||
         (required && value.trim() === "") ||
         value.length > maxLength ||
-        (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value))
+        (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value)) ||
+        (fieldConfig?.choices && value !== "" && !fieldConfig.choices.includes(value))
       ) {
         throw new TypeError(`${field} is empty or exceeds its maximum length.`);
       }
+      if (fieldConfig?.type === "task-ids") parseDependencyIds(value, config);
     }
   }
 
@@ -438,7 +455,10 @@ export function updateTaskRecord(markdown, taskId, updates, source, config) {
   for (const [field, value] of entries) {
     const index = headerIndex(headers, field);
     if (index === -1) throw new Error(`${source.path}: the task table has no ${field} column.`);
-    cells[index] = String(value).trim();
+    const fieldConfig = source.extraFields.find(({ key }) => key === field);
+    cells[index] = fieldConfig?.type === "task-ids"
+      ? normalizeDependencyIds(value, config)
+      : String(value).trim();
   }
   lines[rowIndex] = formatMarkdownRow(cells);
   return lines.join("\n");
@@ -452,10 +472,13 @@ export function validateTaskDraft(sourceKey, draft, config) {
   }
 
   const fields = ["title", "area", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)];
-  const requiredFields = fields.filter((field) => {
-    const configField = source.extraFields.find(({ key }) => key === field);
-    return configField?.type !== "date" || configField.required;
-  });
+  const requiredFields = [
+    "title",
+    "area",
+    "priority",
+    "status",
+    ...source.extraFields.filter(({ required }) => required).map(({ key }) => key),
+  ];
   const keys = Object.keys(draft);
   if (requiredFields.some((field) => !Object.hasOwn(draft, field)) || keys.some((field) => !fields.includes(field))) {
     throw new TypeError(`Task fields must include: ${requiredFields.join(", ")} and no unsupported fields.`);
@@ -470,6 +493,7 @@ export function validateTaskDraft(sourceKey, draft, config) {
     throw new TypeError("Priority is not supported.");
   }
   if (!config.statuses.includes(draft.status)) throw new TypeError("Status is not supported.");
+  const normalizedDraft = { ...draft };
   for (const field of ["details", ...source.extraFields.map(({ key }) => key)]) {
     const fieldConfig = source.extraFields.find(({ key }) => key === field);
     const value = draft[field] ?? "";
@@ -477,14 +501,18 @@ export function validateTaskDraft(sourceKey, draft, config) {
       typeof value !== "string" ||
       value.length > (fieldConfig?.maxLength ?? 5000) ||
       (fieldConfig?.required && value.trim() === "") ||
-      (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value))
+      (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value)) ||
+      (fieldConfig?.choices && value !== "" && !fieldConfig.choices.includes(value))
     ) {
       throw new TypeError(`${fieldConfig?.label ?? "Details"} is empty or exceeds its maximum length.`);
     }
+    normalizedDraft[field] = fieldConfig?.type === "task-ids"
+      ? normalizeDependencyIds(value, config)
+      : value.trim();
   }
 
   return {
-    ...Object.fromEntries(fields.map((field) => [field, (draft[field] ?? "").trim()])),
+    ...Object.fromEntries(fields.map((field) => [field, (normalizedDraft[field] ?? "").trim()])),
     category: source.category,
     source: { document: source.path, section: "Kanban tasks", schemaVersion: TASK_SCHEMA_VERSION },
   };
@@ -540,5 +568,5 @@ export function migrateLegacyMarkdown(markdown, source, tasks, config) {
     throw new Error(`${source.path}: legacy Markdown requires an explicitly configured adapter.`);
   }
   const adapter = getLegacyAdapter(source.legacyAdapter);
-  return addConfiguredExtraFields(adapter.migrate(markdown, source, tasks, config), source, config);
+  return normalizeConfiguredTaskTable(adapter.migrate(markdown, source, tasks, config), source, config);
 }

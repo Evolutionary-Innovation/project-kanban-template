@@ -11,7 +11,7 @@ The template's task state is maintained in the table below. See [architecture](a
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->
-| ID | Title | Status | Priority | Order | Area | Category | Details | Created Date | Completion Date |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| RM-001 | Add installation checks for additional Copilot hosts | In Progress | High | 100 | Compatibility | Roadmap | Verify workspace extension loading behavior against supported host contracts. | | |
-| RM-002 | Add optional task-field display preferences | Future Ideas | Low | 200 | User experience | Roadmap | Consider only if real projects need per-field card summaries. | | |
+| ID | Title | Status | Priority | Order | Area | Category | Details | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RM-001 | Add installation checks for additional Copilot hosts | In Progress | High | 100 | Compatibility | Roadmap | Verify workspace extension loading behavior against supported host contracts. |  |  |  |  |  |  |  |  |  |
+| RM-002 | Add optional task-field display preferences | Future Ideas | Low | 200 | User experience | Roadmap | Consider only if real projects need per-field card summaries. |  |  |  |  |  |  |  |  |  |

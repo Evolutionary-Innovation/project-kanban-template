@@ -24,6 +24,7 @@ const sourceFilter = document.querySelector("#source-filter");
 const priorityFilter = document.querySelector("#priority-filter");
 const categoryFilter = document.querySelector("#category-filter");
 const areaFilter = document.querySelector("#area-filter");
+const dependencyFilter = document.querySelector("#dependency-filter");
 const boardStatistics = document.querySelector("#board-statistics");
 const lastUpdated = document.querySelector("#last-updated");
 const revisionInfo = document.querySelector("#revision-info");
@@ -40,6 +41,7 @@ const viewState = {
   priority: "",
   category: "",
   area: "",
+  dependency: "",
 };
 
 function appendTag(parent, label, className = "") {
@@ -174,7 +176,7 @@ function renderCard(task, index, cardCount) {
   item.draggable = canReorderColumn(task.status);
   item.dataset.taskId = task.id;
   item.dataset.status = task.status;
-  item.setAttribute("aria-label", `${task.title}, ${task.status}, ${task.priority} priority`);
+  item.setAttribute("aria-label", `${presentation.title}, ${task.category}`);
 
   const article = document.createElement("article");
   article.className = "board-card";
@@ -182,23 +184,19 @@ function renderCard(task, index, cardCount) {
   article.dataset.category = task.category;
   article.dataset.sourceType = sourceForTask(task)?.key ?? "";
 
-  const topLine = document.createElement("div");
-  topLine.className = "card-topline";
   const sourceConfig = sourceForTask(task);
   const priority = boardSnapshot.config.priorities.find(({ name }) => name === task.priority);
   article.dataset.priorityTone = priority?.tone ?? "low";
-  appendTag(topLine, task.category, `category-tone-${sourceConfig?.categoryTone ?? "slate"}`);
-  appendTag(topLine, task.priority, `priority-${priority?.tone ?? "low"}`);
-  appendTag(topLine, task.area, "area-tag");
-  appendTag(topLine, task.status, "status-tag");
-  for (const { label, value } of presentation.lifecycleDates) {
-    appendTag(topLine, `${label}: ${value}`, "lifecycle-date-tag");
-  }
-  article.append(topLine);
 
   const title = document.createElement("h3");
-  title.textContent = task.title;
+  title.textContent = presentation.title;
   article.append(title);
+
+  const classification = document.createElement("div");
+  classification.className = "card-classification";
+  appendTag(classification, task.category, `category-tone-${sourceConfig?.categoryTone ?? "slate"}`);
+  appendTag(classification, task.area, "area-tag");
+  article.append(classification);
 
   if (presentation.detailSections.length > 0) {
     const details = document.createElement("div");
@@ -217,11 +215,42 @@ function renderCard(task, index, cardCount) {
     article.append(details);
   }
 
-  const source = document.createElement("span");
-  source.className = "card-source";
-  const reference = task.source.reference ? ` · ${task.source.reference}` : "";
-  source.textContent = `${presentation.showSourceId ? `${task.id} · ` : ""}${task.source.document}${reference}`;
-  article.append(source);
+  if (presentation.relationshipSections.length > 0) {
+    const relationships = document.createElement("section");
+    relationships.className = "card-relationships";
+    relationships.setAttribute("aria-label", "Dependencies");
+    for (const relationship of presentation.relationshipSections) {
+      const row = document.createElement("div");
+      row.className = relationship.label === "Dependency warning"
+        ? "card-relationship-row dependency-warning"
+        : "card-relationship-row";
+      const label = document.createElement("span");
+      label.className = "card-relationship-label";
+      label.textContent = relationship.label;
+      const value = document.createElement("span");
+      value.className = "card-relationship-value";
+      value.textContent = relationship.value;
+      row.append(label, value);
+      relationships.append(row);
+    }
+    article.append(relationships);
+  }
+
+  if (presentation.lifecycleDates.length > 0) {
+    const lifecycle = document.createElement("footer");
+    lifecycle.className = "card-lifecycle";
+    for (const { label, value } of presentation.lifecycleDates) {
+      const date = document.createElement("time");
+      date.className = "card-lifecycle-date";
+      date.dateTime = value;
+      const dateLabel = document.createElement("span");
+      dateLabel.className = "card-lifecycle-label";
+      dateLabel.textContent = `${label}:`;
+      date.append(dateLabel, document.createTextNode(` ${value}`));
+      lifecycle.append(date);
+    }
+    article.append(lifecycle);
+  }
 
   const controls = document.createElement("div");
   controls.className = "card-controls";
@@ -339,7 +368,7 @@ function renderColumns(columns) {
       ["manual", "Manual order"],
       ["priority", "Priority"],
       ["category", "Category"],
-      ["type", "Type"],
+      ["area", "Area"],
     ];
     if (boardSnapshot.config.sources.some(({ extraFields }) => extraFields.some(({ key }) => key === "completionDate"))) {
       sortOptions.push(["completionDate", "Completion date"]);
@@ -496,6 +525,13 @@ function createField(name, labelText, value = "", options = {}) {
   let control;
   if (options.choices) {
     control = document.createElement("select");
+    if (!options.required) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "Not specified";
+      emptyOption.selected = value === "";
+      control.append(emptyOption);
+    }
     for (const choice of options.choices) {
       const option = document.createElement("option");
       option.value = choice;
@@ -512,6 +548,7 @@ function createField(name, labelText, value = "", options = {}) {
     control.value = value;
   }
   control.name = name;
+  if (options.placeholder) control.placeholder = options.placeholder;
   if (options.required) control.required = true;
   if (options.maxLength) control.maxLength = options.maxLength;
   label.append(control);
@@ -535,9 +572,11 @@ function openTaskDialog(mode, taskType, task = null) {
     ["area", "Area", task?.area ?? "", { required: true, maxLength: 100 }],
     ...(mode === "edit" ? [["category", "Category", task.category, { required: true, maxLength: 100 }]] : []),
     ["priority", "Priority", task?.priority ?? boardSnapshot.config.priorities[0].name, {
+      required: true,
       choices: boardSnapshot.config.priorities.map(({ name }) => name),
     }],
     ["status", "Status", task?.status ?? boardSnapshot.config.defaultStatus, {
+      required: true,
       choices: boardSnapshot.config.statuses,
     }],
     ["details", "Details", task?.details ?? "", { multiline: true, maxLength: 5000, fullWidth: true }],
@@ -549,8 +588,10 @@ function openTaskDialog(mode, taskType, task = null) {
         required: field.required,
         maxLength: field.type === "date" ? undefined : field.maxLength,
         inputType: field.type === "date" ? "date" : undefined,
+        choices: field.choices,
+        placeholder: field.type === "task-ids" ? "RM-019, TD-03" : undefined,
         multiline: field.type === "textarea",
-        fullWidth: field.type === "textarea",
+        fullWidth: field.type === "textarea" || field.type === "task-ids",
       },
     ]),
   ];
@@ -768,6 +809,7 @@ for (const [select, key] of [
   [priorityFilter, "priority"],
   [categoryFilter, "category"],
   [areaFilter, "area"],
+  [dependencyFilter, "dependency"],
 ]) {
   select.addEventListener("change", () => {
     viewState[key] = select.value;
@@ -777,8 +819,8 @@ for (const [select, key] of [
 document.querySelector("#clear-filters").addEventListener("click", () => {
   viewState.search = "";
   taskSearchInput.value = "";
-  for (const key of ["source", "priority", "category", "area"]) viewState[key] = "";
-  for (const select of [sourceFilter, priorityFilter, categoryFilter, areaFilter]) select.value = "";
+  for (const key of ["source", "priority", "category", "area", "dependency"]) viewState[key] = "";
+  for (const select of [sourceFilter, priorityFilter, categoryFilter, areaFilter, dependencyFilter]) select.value = "";
   announceViewChange();
 });
 document.querySelector("#collapse-all").addEventListener("click", () => setAllCardsCollapsed(true));

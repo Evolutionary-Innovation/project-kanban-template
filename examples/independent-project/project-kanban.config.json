@@ -21,6 +21,13 @@
       "category": "Planning",
       "categoryTone": "orange",
       "extraFields": [
+        { "key": "dependsOn", "label": "Depends On", "type": "task-ids" },
+        {
+          "key": "executionType",
+          "label": "Execution Type",
+          "type": "text",
+          "choices": ["Human", "AI", "Human+AI", "Decision Required"]
+        },
         { "key": "createdDate", "label": "Created Date", "type": "date" },
         { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]
@@ -35,6 +42,13 @@
       "categoryTone": "slate",
       "extraFields": [
         { "key": "hypothesis", "label": "Hypothesis", "type": "textarea", "required": true },
+        { "key": "dependsOn", "label": "Depends On", "type": "task-ids" },
+        {
+          "key": "executionType",
+          "label": "Execution Type",
+          "type": "text",
+          "choices": ["Human", "AI", "Human+AI", "Decision Required"]
+        },
         { "key": "createdDate", "label": "Created Date", "type": "date" },
         { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]

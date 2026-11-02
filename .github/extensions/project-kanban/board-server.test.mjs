@@ -11,7 +11,9 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
       throw new BoardStorageError("board_revision_conflict", "Refresh before retrying.");
     },
     createTask: async (input) => ({ created: input.task.title }),
-    editTask: async (input) => ({ edited: input.taskId }),
+    editTask: async () => {
+      throw new BoardStorageError("board_dependency_cycle", "The dependency would create a cycle.");
+    },
     deleteTask: async (input) => ({ deleted: input.taskId, confirmed: input.confirmed }),
   });
   const server = createServer(handler);
@@ -45,6 +47,17 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
   assert.deepEqual(await stale.json(), {
     error: "Refresh before retrying.",
     code: "board_revision_conflict",
+  });
+
+  const cycle = await fetch(`${origin}/api/tasks/edit`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(cycle.status, 400);
+  assert.deepEqual(await cycle.json(), {
+    error: "The dependency would create a cycle.",
+    code: "board_dependency_cycle",
   });
 });
 

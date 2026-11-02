@@ -57,7 +57,11 @@ function validateSourcePath(sourcePath) {
 }
 
 function validateExtraField(field, sourceKey, keys) {
-  requireKeys(field, `Extra field for "${sourceKey}"`, ["key", "label", "type"], ["required", "maxLength"]);
+  requireKeys(field, `Extra field for "${sourceKey}"`, ["key", "label", "type"], [
+    "required",
+    "maxLength",
+    "choices",
+  ]);
   const key = requireText(field.key, "Extra field key", 64);
   if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || RESERVED_FIELDS.has(key) || keys.has(key)) {
     throw new TypeError(`Extra field key "${key}" is invalid or duplicated.`);
@@ -65,17 +69,37 @@ function validateExtraField(field, sourceKey, keys) {
   keys.add(key);
 
   const label = requireText(field.label, `Label for "${key}"`, 100);
-  if (!["text", "textarea", "date"].includes(field.type)) {
-    throw new TypeError(`Extra field "${key}" type must be "text", "textarea", or "date".`);
+  if (!["text", "textarea", "date", "task-ids"].includes(field.type)) {
+    throw new TypeError(`Extra field "${key}" has an unsupported type.`);
   }
   if (field.required !== undefined && typeof field.required !== "boolean") {
     throw new TypeError(`Extra field "${key}" required must be a boolean.`);
+  }
+  let choices;
+  if (field.choices !== undefined) {
+    if (
+      field.type !== "text" ||
+      !Array.isArray(field.choices) ||
+      field.choices.length === 0 ||
+      field.choices.some((choice) => typeof choice !== "string" || choice.trim() === "") ||
+      new Set(field.choices).size !== field.choices.length
+    ) {
+      throw new TypeError(`Extra field "${key}" choices must be unique non-empty strings on a text field.`);
+    }
+    choices = Object.freeze([...field.choices]);
   }
   const maxLength = field.maxLength ?? (field.type === "date" ? 10 : 5000);
   if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > 5000) {
     throw new TypeError(`Extra field "${key}" maxLength must be from 1 to 5000.`);
   }
-  return Object.freeze({ key, label, type: field.type, required: field.required ?? false, maxLength });
+  return Object.freeze({
+    key,
+    label,
+    type: field.type,
+    required: field.required ?? false,
+    maxLength,
+    ...(choices ? { choices } : {}),
+  });
 }
 
 function validateSource(source, sourceKeys, paths, prefixes) {

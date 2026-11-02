@@ -27,8 +27,18 @@
       "category": "Delivery",
       "categoryTone": "blue",
       "extraFields": [
+        { "key": "evidence", "label": "Evidence", "type": "textarea" },
+        { "key": "limitation", "label": "Limitation", "type": "textarea" },
+        { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },
         { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "dependsOn", "label": "Depends On", "type": "task-ids" },
+        {
+          "key": "executionType",
+          "label": "Execution Type",
+          "type": "text",
+          "choices": ["Human", "AI", "Human+AI", "Decision Required"]
+        },
         { "key": "createdDate", "label": "Created Date", "type": "date" },
         { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]
@@ -42,10 +52,18 @@
       "category": "Reliability",
       "categoryTone": "purple",
       "extraFields": [
+        { "key": "evidence", "label": "Evidence", "type": "textarea" },
         { "key": "limitation", "label": "Limitation", "type": "textarea" },
         { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },
         { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "dependsOn", "label": "Depends On", "type": "task-ids" },
+        {
+          "key": "executionType",
+          "label": "Execution Type",
+          "type": "text",
+          "choices": ["Human", "AI", "Human+AI", "Decision Required"]
+        },
         { "key": "createdDate", "label": "Created Date", "type": "date" },
         { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]
@@ -60,8 +78,17 @@
       "categoryTone": "green",
       "extraFields": [
         { "key": "evidence", "label": "Evidence", "type": "textarea" },
+        { "key": "limitation", "label": "Limitation", "type": "textarea" },
+        { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },
         { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "dependsOn", "label": "Depends On", "type": "task-ids" },
+        {
+          "key": "executionType",
+          "label": "Execution Type",
+          "type": "text",
+          "choices": ["Human", "AI", "Human+AI", "Decision Required"]
+        },
         { "key": "createdDate", "label": "Created Date", "type": "date" },
         { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]

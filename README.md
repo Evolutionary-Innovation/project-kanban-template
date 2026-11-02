@@ -9,6 +9,8 @@ A GitHub repository template for a small, Markdown-backed Kanban canvas. Copy it
 - A sticky status footer, in-column search, combined filters, session-only card collapse, and independent view-only column sorting.
 - Configurable Created Date and Completion Date lifecycle fields, latest-completion tracking, manual corrections, and date sorting.
 - Scannable cards with `ID: Title` titles, lifecycle metadata, and separately labeled Details/configured fields.
+- Cross-source `Depends On` links with derived blocker state, cycle validation, dependency-aware search/filters, and graph-ready data.
+- Configured `Execution Type` choices as passive metadata; the board does not launch agents or trigger work from status changes.
 - Markdown as the only task source of truth.
 - Revision checks, exclusive write locking, atomic file replacement, file-mode preservation, validation, and HTTP 409 conflict handling.
 - Example roadmap, technical-debt register, and repository audit documents.

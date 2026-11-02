@@ -7,6 +7,7 @@ import {
   appendTaskRecord,
   deleteTaskRecord,
   migrateLegacyMarkdown,
+  normalizeConfiguredTaskTable,
   parseBoardDocuments,
   updateTaskRecord,
   validateTaskDraft,
@@ -36,6 +37,32 @@ test("parses the configured starter documents into status-derived columns", asyn
   assert.deepEqual(board.sources, config.sources.map(({ path }) => path));
 });
 
+test("reads schema-v1 tables with omitted optional fields and normalizes them on write", async () => {
+  const { config, documents } = await loadProject();
+  const source = config.sources[0];
+  const olderMarkdown = `# Roadmap
+
+## Kanban tasks
+${config.schemaMarker}
+| ID | Title | Status | Priority | Order | Area | Category | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| RM-001 | Retain old schema rows | Planned | High | 100 | Core | Delivery | Existing task. |
+`;
+  const parsed = parseBoardDocuments({ ...documents, [source.path]: olderMarkdown }, config);
+  const task = parsed.tasks.find(({ id }) => id === "RM-001");
+
+  assert.equal(task.dependsOn, "");
+  assert.equal(task.executionType, "");
+  const normalized = normalizeConfiguredTaskTable(olderMarkdown, source, config);
+  assert.match(normalized, /\| Depends On \|/);
+  assert.match(normalized, /\| Execution Type \|/);
+  assert.doesNotMatch(normalized, /\| Blocked By \|/);
+  assert.equal(
+    parseBoardDocuments({ ...documents, [source.path]: normalized }, config).tasks.find(({ id }) => id === "RM-001").dependsOn,
+    "",
+  );
+});
+
 test("parses an independent project's statuses, source paths, priorities, and extra fields", async () => {
   const exampleRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
   const { config, documents } = await loadProject(exampleRoot);
@@ -46,6 +73,7 @@ test("parses an independent project's statuses, source paths, priorities, and ex
   assert.equal(experiment.hypothesis, "A short daily review will reduce missed follow-ups.");
   assert.equal(experiment.createdDate, "");
   assert.equal(board.tasks.find(({ id }) => id === "PLAN-001").priority, "Urgent");
+  assert.deepEqual(experiment.dependencyView.dependsOn, ["PLAN-001"]);
 });
 
 test("adds configured date fields when an explicit legacy adapter migrates a source", async () => {
@@ -137,6 +165,8 @@ test("parses the isolated synthetic browser fixture with its exact UX data distr
   assert.equal(board.tasks.find(({ id }) => id === "RM-005").completionDate, "2026-03-14");
   assert.equal(board.tasks.find(({ id }) => id === "RA-008").status, "Complete");
   assert.equal(board.tasks.find(({ id }) => id === "RA-008").completionDate, "");
+  assert.ok(board.tasks.some(({ dependencyView }) => dependencyView?.hasUnresolved));
+  assert.ok(board.tasks.some(({ dependencyView }) => dependencyView?.hasCycle));
   assert.match(board.tasks.find(({ id }) => id === "RM-002").details, /escaped pipe \| stays/);
 });
 

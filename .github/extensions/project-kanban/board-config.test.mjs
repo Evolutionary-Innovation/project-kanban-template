@@ -17,11 +17,23 @@ test("loads the default project config and validates configured source paths", a
     "docs/repository-audit.md",
   ]);
   assert.deepEqual(config.sources[1].extraFields.map(({ key }) => key), [
+    "evidence",
     "limitation",
     "recommendedFix",
     "rationale",
+    "recommendations",
+    "dependsOn",
+    "executionType",
     "createdDate",
     "completionDate",
+  ]);
+  assert.deepEqual(config.sources[0].extraFields.map(({ key }) => key), config.sources[1].extraFields.map(({ key }) => key));
+  assert.deepEqual(config.sources[2].extraFields.map(({ key }) => key), config.sources[1].extraFields.map(({ key }) => key));
+  assert.deepEqual(config.sources[0].extraFields.find(({ key }) => key === "executionType").choices, [
+    "Human",
+    "AI",
+    "Human+AI",
+    "Decision Required",
   ]);
   assert.equal(config.completionStatus, "Complete");
 });

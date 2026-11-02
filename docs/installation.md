@@ -33,6 +33,8 @@ node --test .github/extensions/project-kanban/*.test.mjs .github/extensions/proj
 
 The `examples/independent-project/` fixture demonstrates a project with different statuses, sources, prefixes, and task fields.
 
+The `examples/synthetic-browser-project/` fixture contains fictional roadmap, debt, and audit-style rows for board UX testing. Run `node examples/synthetic-browser-project/serve.mjs` from the repository root to open it in a browser. All new browser and UX checks should use this isolated workspace; its server persists only to the fixture documents.
+
 ## Enable GitHub template mode
 
 After pushing this repository to GitHub, open repository **Settings → General** and enable **Template repository**. This local project scaffold is not published or marked as a template automatically.

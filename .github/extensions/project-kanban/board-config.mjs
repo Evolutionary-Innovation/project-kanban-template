@@ -65,13 +65,13 @@ function validateExtraField(field, sourceKey, keys) {
   keys.add(key);
 
   const label = requireText(field.label, `Label for "${key}"`, 100);
-  if (!["text", "textarea"].includes(field.type)) {
-    throw new TypeError(`Extra field "${key}" type must be "text" or "textarea".`);
+  if (!["text", "textarea", "date"].includes(field.type)) {
+    throw new TypeError(`Extra field "${key}" type must be "text", "textarea", or "date".`);
   }
   if (field.required !== undefined && typeof field.required !== "boolean") {
     throw new TypeError(`Extra field "${key}" required must be a boolean.`);
   }
-  const maxLength = field.maxLength ?? 5000;
+  const maxLength = field.maxLength ?? (field.type === "date" ? 10 : 5000);
   if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > 5000) {
     throw new TypeError(`Extra field "${key}" maxLength must be from 1 to 5000.`);
   }
@@ -155,6 +155,7 @@ export function validateBoardConfig(input, workspaceRoot) {
       "sources",
       "defaultStatus",
     ],
+    ["completionStatus"],
   );
   if (input.configVersion !== 1) throw new TypeError("Project Kanban configVersion must be 1.");
 
@@ -192,6 +193,18 @@ export function validateBoardConfig(input, workspaceRoot) {
   const sourcePaths = new Set();
   const prefixes = new Set();
   const sources = input.sources.map((source) => validateSource(source, sourceKeys, sourcePaths, prefixes));
+  if (input.completionStatus !== undefined) {
+    if (!statuses.includes(input.completionStatus)) {
+      throw new TypeError("completionStatus must match one of the configured statuses.");
+    }
+    if (
+      sources.some(
+        (source) => !source.extraFields.some(({ key, type }) => key === "completionDate" && type === "date"),
+      )
+    ) {
+      throw new TypeError("Every source must configure completionDate as a date field when completionStatus is set.");
+    }
+  }
   if (workspaceRoot) {
     const root = resolve(workspaceRoot);
     for (const source of sources) {
@@ -212,6 +225,7 @@ export function validateBoardConfig(input, workspaceRoot) {
     priorities: Object.freeze(priorities),
     sources: Object.freeze(sources),
     defaultStatus: input.defaultStatus,
+    ...(input.completionStatus !== undefined ? { completionStatus: input.completionStatus } : {}),
   });
 }
 

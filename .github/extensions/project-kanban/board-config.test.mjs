@@ -20,7 +20,10 @@ test("loads the default project config and validates configured source paths", a
     "limitation",
     "recommendedFix",
     "rationale",
+    "createdDate",
+    "completionDate",
   ]);
+  assert.equal(config.completionStatus, "Complete");
 });
 
 test("supports a distinct independent project configuration", async () => {
@@ -30,6 +33,7 @@ test("supports a distinct independent project configuration", async () => {
   assert.deepEqual(config.statuses, ["Open", "Doing", "Done"]);
   assert.deepEqual(config.sources.map(({ idPrefix }) => idPrefix), ["PLAN", "EXP"]);
   assert.equal(config.sources[1].extraFields[0].key, "hypothesis");
+  assert.equal(config.completionStatus, "Done");
 });
 
 test("rejects unsafe paths, duplicate sources, and invalid field definitions", async () => {
@@ -56,4 +60,11 @@ test("rejects unsupported config keys and status defaults", async () => {
 
   const invalidDefault = { ...raw, defaultStatus: "Started" };
   assert.throws(() => validateBoardConfig(invalidDefault, workspaceRoot), /defaultStatus/);
+
+  const invalidCompletionStatus = { ...raw, completionStatus: "Finished" };
+  assert.throws(() => validateBoardConfig(invalidCompletionStatus, workspaceRoot), /completionStatus/);
+
+  const missingDateField = structuredClone(raw);
+  missingDateField.sources[0].extraFields = [];
+  assert.throws(() => validateBoardConfig(missingDateField, workspaceRoot), /completionDate as a date field/);
 });

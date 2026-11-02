@@ -1,3 +1,13 @@
+import {
+  calculateOrderValue,
+  compareCanonicalTaskOrder,
+  filterTasks,
+  getCardPresentation,
+  hasActiveTaskFilters,
+  isManualOrderView,
+  sortTasks,
+} from "./board-view.mjs";
+
 const boardElement = document.querySelector("#board");
 const statusElement = document.querySelector("#status");
 const sourcesElement = document.querySelector("#sources");
@@ -9,9 +19,28 @@ const taskForm = document.querySelector("#task-form");
 const taskFormFields = document.querySelector("#task-form-fields");
 const taskFormError = document.querySelector("#task-form-error");
 const saveTaskButton = document.querySelector("#save-task");
+const taskSearchInput = document.querySelector("#task-search");
+const sourceFilter = document.querySelector("#source-filter");
+const priorityFilter = document.querySelector("#priority-filter");
+const categoryFilter = document.querySelector("#category-filter");
+const areaFilter = document.querySelector("#area-filter");
+const boardStatistics = document.querySelector("#board-statistics");
+const lastUpdated = document.querySelector("#last-updated");
+const revisionInfo = document.querySelector("#revision-info");
+const orderingHint = document.querySelector("#ordering-hint");
 let boardSnapshot = null;
 let draggedTaskId = null;
 let dialogMode = null;
+const collapsedTaskIds = new Set();
+const sortByStatus = new Map();
+
+const viewState = {
+  search: "",
+  source: "",
+  priority: "",
+  category: "",
+  area: "",
+};
 
 function appendTag(parent, label, className = "") {
   const tag = document.createElement("span");
@@ -20,13 +49,69 @@ function appendTag(parent, label, className = "") {
   parent.append(tag);
 }
 
-function displayDetails(task) {
-  const source = boardSnapshot.config.sources.find(({ path }) => path === task.source.document);
-  const details = [task.details];
-  for (const field of source?.extraFields ?? []) {
-    if (task[field.key]) details.push(`${field.label}: ${task[field.key]}`);
+function sourceForTask(task) {
+  return boardSnapshot.config.sources.find(({ path }) => path === task.source.document);
+}
+
+function canonicalTaskOrder(left, right) {
+  return compareCanonicalTaskOrder(left, right, boardSnapshot.config);
+}
+
+function sortColumnCards(cards, status) {
+  return sortTasks(cards, boardSnapshot.config, sortByStatus.get(status) ?? "manual");
+}
+
+function hasActiveFilters() {
+  return hasActiveTaskFilters(viewState);
+}
+
+function canReorderColumn(status) {
+  return isManualOrderView(viewState, sortByStatus.get(status) ?? "manual");
+}
+
+function updateBoardSummary() {
+  if (!boardSnapshot) return;
+  const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
+  boardStatistics.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks shown`;
+  orderingHint.hidden = !hasActiveFilters() && !boardSnapshot.config.statuses.some(
+    (status) => (sortByStatus.get(status) ?? "manual") !== "manual",
+  );
+}
+
+function setSelectOptions(select, placeholder, values, selectedValue) {
+  const options = values.map(({ value, label }) => ({ value, label }));
+  const validSelection = options.some(({ value }) => value === selectedValue) ? selectedValue : "";
+  const fragment = document.createDocumentFragment();
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = placeholder;
+  fragment.append(allOption);
+  for (const { value, label } of options) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    fragment.append(option);
   }
-  return details.filter(Boolean).join(" ");
+  select.replaceChildren(fragment);
+  select.value = validSelection;
+  return validSelection;
+}
+
+function refreshFilterOptions() {
+  const sources = boardSnapshot.config.sources.map(({ key, label }) => ({ value: key, label }));
+  const priorities = boardSnapshot.config.priorities.map(({ name }) => ({ value: name, label: name }));
+  const categories = [...new Set(boardSnapshot.tasks.map(({ category }) => category))]
+    .sort((left, right) => left.localeCompare(right))
+    .map((value) => ({ value, label: value }));
+  const areas = [...new Set(boardSnapshot.tasks.map(({ area }) => area))]
+    .sort((left, right) => left.localeCompare(right))
+    .map((value) => ({ value, label: value }));
+
+  viewState.source = setSelectOptions(sourceFilter, "All sources", sources, viewState.source);
+  viewState.priority = setSelectOptions(priorityFilter, "All priorities", priorities, viewState.priority);
+  viewState.category = setSelectOptions(categoryFilter, "All categories", categories, viewState.category);
+  viewState.area = setSelectOptions(areaFilter, "All areas", areas, viewState.area);
+  taskSearchInput.value = viewState.search;
 }
 
 function createMoveButton(task, direction, index, cardCount) {
@@ -38,7 +123,8 @@ function createMoveButton(task, direction, index, cardCount) {
     "aria-label",
     `Move ${task.title} ${direction === "up" ? "earlier" : "later"} in ${task.status}`,
   );
-  button.disabled = direction === "up" ? index === 0 : index === cardCount - 1;
+  button.disabled =
+    !canReorderColumn(task.status) || (direction === "up" ? index === 0 : index === cardCount - 1);
   button.addEventListener("click", () => {
     void moveTaskToIndex(task.id, task.status, index + (direction === "up" ? -1 : 1));
   });
@@ -61,25 +147,31 @@ function createStatusSelect(task) {
     select.append(option);
   }
   select.addEventListener("change", () => {
-    void moveTaskToIndex(task.id, select.value, Number.POSITIVE_INFINITY);
+    void moveTaskToStatus(task.id, select.value);
   });
   label.append(select);
   return label;
 }
 
-function createCardAction(label, className, handler) {
+function createCardAction(label, className, handler, action = "") {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `card-action-button ${className}`.trim();
   button.textContent = label;
+  if (action) button.dataset.cardAction = action;
   button.addEventListener("click", handler);
   return button;
 }
 
 function renderCard(task, index, cardCount) {
+  const presentation = getCardPresentation(
+    task,
+    boardSnapshot.config,
+    collapsedTaskIds.has(task.id),
+  );
   const item = document.createElement("li");
   item.className = "board-card-item";
-  item.draggable = true;
+  item.draggable = canReorderColumn(task.status);
   item.dataset.taskId = task.id;
   item.dataset.status = task.status;
   item.setAttribute("aria-label", `${task.title}, ${task.status}, ${task.priority} priority`);
@@ -88,42 +180,69 @@ function renderCard(task, index, cardCount) {
   article.className = "board-card";
   article.dataset.priority = task.priority;
   article.dataset.category = task.category;
+  article.dataset.sourceType = sourceForTask(task)?.key ?? "";
 
   const topLine = document.createElement("div");
   topLine.className = "card-topline";
-  const sourceConfig = boardSnapshot.config.sources.find(({ path }) => path === task.source.document);
+  const sourceConfig = sourceForTask(task);
   const priority = boardSnapshot.config.priorities.find(({ name }) => name === task.priority);
+  article.dataset.priorityTone = priority?.tone ?? "low";
   appendTag(topLine, task.category, `category-tone-${sourceConfig?.categoryTone ?? "slate"}`);
   appendTag(topLine, task.priority, `priority-${priority?.tone ?? "low"}`);
   appendTag(topLine, task.area, "area-tag");
+  appendTag(topLine, task.status, "status-tag");
+  for (const { label, value } of presentation.lifecycleDates) {
+    appendTag(topLine, `${label}: ${value}`, "lifecycle-date-tag");
+  }
   article.append(topLine);
 
   const title = document.createElement("h3");
   title.textContent = task.title;
   article.append(title);
 
-  const descriptionText = displayDetails(task);
-  if (descriptionText) {
-    const description = document.createElement("p");
-    description.className = "card-details";
-    description.textContent = descriptionText;
-    article.append(description);
+  if (presentation.detailSections.length > 0) {
+    const details = document.createElement("div");
+    details.className = "card-details";
+    details.hidden = presentation.detailsHidden;
+    for (const sectionData of presentation.detailSections) {
+      const section = document.createElement("section");
+      section.className = "card-detail-section";
+      const heading = document.createElement("h4");
+      heading.textContent = sectionData.label;
+      const content = document.createElement("p");
+      content.textContent = sectionData.value;
+      section.append(heading, content);
+      details.append(section);
+    }
+    article.append(details);
   }
 
   const source = document.createElement("span");
   source.className = "card-source";
   const reference = task.source.reference ? ` · ${task.source.reference}` : "";
-  source.textContent = `${task.id} · ${task.source.document}${reference}`;
+  source.textContent = `${presentation.showSourceId ? `${task.id} · ` : ""}${task.source.document}${reference}`;
   article.append(source);
 
   const controls = document.createElement("div");
   controls.className = "card-controls";
   controls.append(
+    createCardAction(
+      collapsedTaskIds.has(task.id) ? "Expand" : "Collapse",
+      "collapse-button",
+      () => toggleCardCollapsed(task.id),
+      "collapse",
+    ),
     createMoveButton(task, "up", index, cardCount),
     createMoveButton(task, "down", index, cardCount),
     createStatusSelect(task),
     createCardAction("Edit", "", () => openEditDialog(task)),
     createCardAction("Delete", "delete-button", () => void deleteTask(task)),
+  );
+  const collapseButton = controls.querySelector('[data-card-action="collapse"]');
+  collapseButton.setAttribute("aria-expanded", String(!collapsedTaskIds.has(task.id)));
+  collapseButton.setAttribute(
+    "aria-label",
+    `${collapsedTaskIds.has(task.id) ? "Expand" : "Collapse"} details for ${task.title}`,
   );
   article.append(controls);
   item.append(article);
@@ -147,7 +266,15 @@ function renderBoard(payload) {
   }
 
   boardSnapshot = payload;
+  const taskIds = new Set(payload.tasks.map(({ id }) => id));
+  for (const taskId of collapsedTaskIds) {
+    if (!taskIds.has(taskId)) collapsedTaskIds.delete(taskId);
+  }
+  for (const status of sortByStatus.keys()) {
+    if (!payload.config.statuses.includes(status)) sortByStatus.delete(status);
+  }
   document.title = payload.config.boardTitle;
+  boardElement.style.setProperty("--board-column-count", String(payload.config.statuses.length));
   const projectName = document.querySelector("#project-name");
   if (projectName) projectName.textContent = payload.config.projectName;
   createActionsElement.replaceChildren();
@@ -160,37 +287,99 @@ function renderBoard(payload) {
     createActionsElement.append(button);
   }
 
+  refreshFilterOptions();
+  renderColumns(payload.columns);
+  sourcesElement.textContent = payload.sources.join(" · ");
+  revisionInfo.textContent = Object.entries(payload.revisions)
+    .map(([path, revision]) => `${path}: ${revision.slice(0, 8)}`)
+    .join(" · ");
+  lastUpdated.textContent = `Last refreshed: ${
+    payload.generatedAt ? new Date(payload.generatedAt).toLocaleString() : "time unavailable"
+  }`;
+  updateBoardSummary();
+  statusElement.textContent = `${payload.tasks.length} tasks loaded.`;
+}
+
+function renderColumns(columns) {
   const fragment = document.createDocumentFragment();
-  for (const column of payload.columns) {
+  for (const column of columns) {
     if (!column || typeof column.status !== "string" || !Array.isArray(column.cards)) {
       throw new Error("The board response contains an invalid column.");
     }
 
+    const visibleCards = sortColumnCards(filterTasks(column.cards, boardSnapshot.config, viewState), column.status);
     const section = document.createElement("section");
     section.className = "board-column";
     section.dataset.status = column.status;
-    section.setAttribute("aria-label", `${column.status}, ${column.cards.length} cards`);
+    section.setAttribute("aria-label", `${column.status}, ${visibleCards.length} of ${column.cards.length} cards shown`);
 
     const heading = document.createElement("div");
     heading.className = "column-heading";
+    const headingCopy = document.createElement("div");
+    headingCopy.className = "column-heading-copy";
+    const headingLine = document.createElement("div");
+    headingLine.className = "column-heading-line";
     const title = document.createElement("h2");
     title.textContent = column.status;
     const count = document.createElement("span");
     count.className = "column-count";
-    count.textContent = String(column.cards.length);
-    count.setAttribute("aria-label", `${column.cards.length} cards`);
-    heading.append(title, count);
+    count.textContent = hasActiveFilters() ? `${visibleCards.length}/${column.cards.length}` : String(column.cards.length);
+    count.setAttribute("aria-label", `${visibleCards.length} of ${column.cards.length} cards shown`);
+    headingLine.append(title, count);
+    headingCopy.append(headingLine);
+
+    const sortLabel = document.createElement("label");
+    sortLabel.className = "column-sort-field";
+    sortLabel.append(document.createTextNode("Sort "));
+    const sortSelect = document.createElement("select");
+    sortSelect.className = "column-sort";
+    sortSelect.dataset.columnStatus = column.status;
+    sortSelect.setAttribute("aria-label", sortLabel.textContent);
+    const sortOptions = [
+      ["manual", "Manual order"],
+      ["priority", "Priority"],
+      ["category", "Category"],
+      ["type", "Type"],
+    ];
+    if (boardSnapshot.config.sources.some(({ extraFields }) => extraFields.some(({ key }) => key === "completionDate"))) {
+      sortOptions.push(["completionDate", "Completion date"]);
+    }
+    if (boardSnapshot.config.sources.some(({ extraFields }) => extraFields.some(({ key }) => key === "createdDate"))) {
+      sortOptions.push(["createdDate", "Created date"]);
+    }
+    const selectedSort = sortByStatus.get(column.status) ?? "manual";
+    for (const [value, label] of sortOptions) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === selectedSort;
+      sortSelect.append(option);
+    }
+    sortSelect.addEventListener("change", () => {
+      sortByStatus.set(column.status, sortSelect.value);
+      renderColumns(boardSnapshot.columns);
+      updateBoardSummary();
+      [...document.querySelectorAll(".column-sort")]
+        .find((select) => select.dataset.columnStatus === column.status)
+        ?.focus();
+      statusElement.textContent = `${column.status} sorted by ${sortSelect.selectedOptions[0].textContent}.`;
+    });
+    sortLabel.append(sortSelect);
+    headingCopy.append(sortLabel);
+    heading.append(headingCopy);
     section.append(heading);
 
     const list = document.createElement("ul");
     list.className = "cards";
-    if (column.cards.length === 0) {
+    if (visibleCards.length === 0) {
       const empty = document.createElement("li");
       empty.className = "empty-column";
-      empty.textContent = "Drop a task here to update its Status.";
+      empty.textContent = column.cards.length === 0
+        ? "Drop a task here to update its Status."
+        : "No tasks match the current search and filters.";
       list.append(empty);
     } else {
-      column.cards.forEach((task, index) => {
+      visibleCards.forEach((task, index) => {
         if (
           !task ||
           typeof task.id !== "string" ||
@@ -204,7 +393,7 @@ function renderBoard(payload) {
         ) {
           throw new Error("The board response contains an invalid task.");
         }
-        list.append(renderCard(task, index, column.cards.length));
+        list.append(renderCard(task, index, visibleCards.length));
       });
     }
     section.append(list);
@@ -212,27 +401,18 @@ function renderBoard(payload) {
   }
 
   boardElement.replaceChildren(fragment);
-  sourcesElement.textContent = payload.sources.join(" · ");
-  statusElement.textContent = `${payload.tasks.length} tasks loaded. Drag to move; use card actions to edit, delete, or reorder.`;
+}
+
+function announceViewChange() {
+  if (!boardSnapshot) return;
+  renderColumns(boardSnapshot.columns);
+  updateBoardSummary();
+  const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
+  statusElement.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks match the current view.`;
 }
 
 function calculateOrder(taskId, status, requestedIndex) {
-  const destination = boardSnapshot.tasks
-    .filter((task) => task.status === status && task.id !== taskId)
-    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
-  const index = Math.max(0, Math.min(destination.length, requestedIndex));
-  const previous = destination[index - 1];
-  const next = destination[index];
-
-  if (!previous && !next) return 100;
-  if (!previous) return next.order - 100;
-  if (!next) return previous.order + 100;
-
-  const order = previous.order + (next.order - previous.order) / 2;
-  if (!Number.isFinite(order) || order === previous.order || order === next.order) {
-    throw new Error("There is no Order value between these cards. Refresh and try a different position.");
-  }
-  return order;
+  return calculateOrderValue(boardSnapshot.tasks, taskId, status, requestedIndex, boardSnapshot.config);
 }
 
 async function postTaskMutation(endpoint, payload, progressMessage) {
@@ -268,12 +448,35 @@ async function moveTaskToIndex(taskId, status, index) {
     if (!task || !boardSnapshot.config.statuses.includes(status)) {
       throw new Error("The selected task or Status is unavailable.");
     }
+    if (!canReorderColumn(task.status) || !canReorderColumn(status)) {
+      throw new Error("Reordering is disabled while search, filters, or a non-manual column sort is active.");
+    }
     const destinationLength = boardSnapshot.tasks.filter(
       (candidate) => candidate.status === status && candidate.id !== taskId,
     ).length;
     const boundedIndex = Number.isFinite(index) ? index : destinationLength;
     const order = calculateOrder(taskId, status, boundedIndex);
     if (task.status === status && task.order === order) return;
+    await postTaskMutation(
+      "/api/tasks/move",
+      { taskId, status, order },
+      `Saving ${task.title} to ${status}…`,
+    );
+  } catch (error) {
+    statusElement.textContent =
+      error instanceof Error ? `Unable to save move: ${error.message}` : "Unable to save task move.";
+  }
+}
+
+async function moveTaskToStatus(taskId, status) {
+  try {
+    const task = boardSnapshot?.tasks.find((candidate) => candidate.id === taskId);
+    if (!task || !boardSnapshot.config.statuses.includes(status)) {
+      throw new Error("The selected task or Status is unavailable.");
+    }
+    if (task.status === status) return;
+    const destinationLength = boardSnapshot.tasks.filter((candidate) => candidate.status === status).length;
+    const order = calculateOrder(taskId, status, destinationLength);
     await postTaskMutation(
       "/api/tasks/move",
       { taskId, status, order },
@@ -305,7 +508,7 @@ function createField(name, labelText, value = "", options = {}) {
     control.value = value;
   } else {
     control = document.createElement("input");
-    control.type = "text";
+    control.type = options.inputType ?? "text";
     control.value = value;
   }
   control.name = name;
@@ -344,7 +547,8 @@ function openTaskDialog(mode, taskType, task = null) {
       task?.[field.key] ?? "",
       {
         required: field.required,
-        maxLength: field.maxLength,
+        maxLength: field.type === "date" ? undefined : field.maxLength,
+        inputType: field.type === "date" ? "date" : undefined,
         multiline: field.type === "textarea",
         fullWidth: field.type === "textarea",
       },
@@ -382,9 +586,18 @@ async function submitTaskForm(event) {
         "Creating task…",
       );
     } else {
+      const task = boardSnapshot.tasks.find(({ id }) => id === dialogMode.taskId);
+      if (!task) throw new Error("The selected task is no longer available.");
+      const updates = Object.fromEntries(
+        Object.entries(values).filter(([field, value]) => String(task[field] ?? "") !== value),
+      );
+      if (Object.keys(updates).length === 0) {
+        closeTaskDialog();
+        return;
+      }
       await postTaskMutation(
         "/api/tasks/edit",
-        { taskId: dialogMode.taskId, updates: values },
+        { taskId: dialogMode.taskId, updates },
         "Saving task changes…",
       );
     }
@@ -414,9 +627,51 @@ async function deleteTask(task) {
   }
 }
 
+function updateCardCollapseState(taskId, collapsed) {
+  const item = [...boardElement.querySelectorAll("[data-task-id]")]
+    .find((candidate) => candidate.dataset.taskId === taskId);
+  if (!item) return;
+  const task = boardSnapshot.tasks.find((candidate) => candidate.id === taskId);
+  applyCollapseState(item, task, collapsed);
+}
+
+function applyCollapseState(item, task, collapsed) {
+  const details = item.querySelector(".card-details");
+  if (details) details.hidden = collapsed;
+  const button = item.querySelector('[data-card-action="collapse"]');
+  if (!button) return;
+  button.textContent = collapsed ? "Expand" : "Collapse";
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} details for ${task?.title ?? item.dataset.taskId}`);
+}
+
+function toggleCardCollapsed(taskId) {
+  const collapsed = !collapsedTaskIds.has(taskId);
+  if (collapsed) collapsedTaskIds.add(taskId);
+  else collapsedTaskIds.delete(taskId);
+  updateCardCollapseState(taskId, collapsed);
+  statusElement.textContent = `Details ${collapsed ? "collapsed" : "expanded"} for ${taskId}.`;
+}
+
+function setAllCardsCollapsed(collapsed) {
+  if (!boardSnapshot) return;
+  const taskById = new Map(boardSnapshot.tasks.map((task) => [task.id, task]));
+  for (const task of boardSnapshot.tasks) {
+    if (collapsed) collapsedTaskIds.add(task.id);
+    else collapsedTaskIds.delete(task.id);
+  }
+  for (const item of boardElement.querySelectorAll("[data-task-id]")) {
+    applyCollapseState(item, taskById.get(item.dataset.taskId), collapsed);
+  }
+  statusElement.textContent = `All ${boardSnapshot.tasks.length} cards ${collapsed ? "collapsed" : "expanded"}.`;
+}
+
 boardElement.addEventListener("dragstart", (event) => {
   const item = event.target.closest("[data-task-id]");
-  if (!item || !event.dataTransfer) return;
+  if (!item || !event.dataTransfer || !item.draggable || !canReorderColumn(item.dataset.status)) {
+    event.preventDefault();
+    return;
+  }
   draggedTaskId = item.dataset.taskId;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", draggedTaskId);
@@ -432,14 +687,21 @@ boardElement.addEventListener("dragend", () => {
 
 boardElement.addEventListener("dragover", (event) => {
   const column = event.target.closest(".board-column");
-  if (!column || !draggedTaskId) return;
+  if (!column || !draggedTaskId || !canReorderColumn(column.dataset.status)) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
 });
 
 boardElement.addEventListener("drop", (event) => {
   const column = event.target.closest(".board-column");
-  if (!column || !draggedTaskId) return;
+  const draggedTask = boardSnapshot?.tasks.find((task) => task.id === draggedTaskId);
+  if (
+    !column ||
+    !draggedTaskId ||
+    !draggedTask ||
+    !canReorderColumn(draggedTask.status) ||
+    !canReorderColumn(column.dataset.status)
+  ) return;
   event.preventDefault();
 
   const target = event.target.closest("[data-task-id]");
@@ -451,7 +713,7 @@ boardElement.addEventListener("drop", (event) => {
     if (targetTask) {
       const cards = boardSnapshot.tasks
         .filter((task) => task.status === column.dataset.status && task.id !== taskId)
-        .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id));
+        .sort(canonicalTaskOrder);
       const targetIndex = cards.findIndex((task) => task.id === targetTask.id);
       const rect = target.getBoundingClientRect();
       insertionIndex = targetIndex + (event.clientY < rect.top + rect.height / 2 ? 0 : 1);
@@ -462,7 +724,7 @@ boardElement.addEventListener("drop", (event) => {
 
 boardElement.addEventListener("dragenter", (event) => {
   const column = event.target.closest(".board-column");
-  if (column) column.classList.add("is-drop-target");
+  if (column && canReorderColumn(column.dataset.status)) column.classList.add("is-drop-target");
 });
 
 boardElement.addEventListener("dragleave", (event) => {
@@ -487,6 +749,9 @@ async function refreshBoard() {
   } catch (error) {
     boardElement.replaceChildren();
     sourcesElement.textContent = "unavailable";
+    boardStatistics.textContent = "Task counts unavailable.";
+    revisionInfo.textContent = "";
+    lastUpdated.textContent = "Last refreshed: unavailable";
     statusElement.textContent =
       error instanceof Error ? `Unable to load board: ${error.message}` : "Unable to load board.";
   } finally {
@@ -494,6 +759,31 @@ async function refreshBoard() {
   }
 }
 
+taskSearchInput.addEventListener("input", () => {
+  viewState.search = taskSearchInput.value.trim();
+  announceViewChange();
+});
+for (const [select, key] of [
+  [sourceFilter, "source"],
+  [priorityFilter, "priority"],
+  [categoryFilter, "category"],
+  [areaFilter, "area"],
+]) {
+  select.addEventListener("change", () => {
+    viewState[key] = select.value;
+    announceViewChange();
+  });
+}
+document.querySelector("#clear-filters").addEventListener("click", () => {
+  viewState.search = "";
+  taskSearchInput.value = "";
+  for (const key of ["source", "priority", "category", "area"]) viewState[key] = "";
+  for (const select of [sourceFilter, priorityFilter, categoryFilter, areaFilter]) select.value = "";
+  announceViewChange();
+});
+document.querySelector("#collapse-all").addEventListener("click", () => setAllCardsCollapsed(true));
+document.querySelector("#expand-all").addEventListener("click", () => setAllCardsCollapsed(false));
+orderingHint.hidden = true;
 createActionsElement.addEventListener("click", (event) => {
   const button = event.target.closest("[data-create]");
   if (button) openTaskDialog("create", button.dataset.create);

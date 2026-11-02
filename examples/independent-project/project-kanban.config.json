@@ -10,6 +10,7 @@
     { "name": "Whenever", "tone": "low" }
   ],
   "defaultStatus": "Open",
+  "completionStatus": "Done",
   "sources": [
     {
       "key": "plans",
@@ -19,7 +20,10 @@
       "idWidth": 3,
       "category": "Planning",
       "categoryTone": "orange",
-      "extraFields": []
+      "extraFields": [
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
     },
     {
       "key": "experiments",
@@ -30,7 +34,9 @@
       "category": "Experiment",
       "categoryTone": "slate",
       "extraFields": [
-        { "key": "hypothesis", "label": "Hypothesis", "type": "textarea", "required": true }
+        { "key": "hypothesis", "label": "Hypothesis", "type": "textarea", "required": true },
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]
     }
   ]

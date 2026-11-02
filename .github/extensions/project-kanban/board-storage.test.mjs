@@ -16,6 +16,11 @@ import { readBoardConfig } from "./board-config.mjs";
 
 const templateRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
+function todayDateOnly() {
+  const now = new Date();
+  return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 async function createWorkspace(t, sourceRoot = templateRoot) {
   const root = await mkdtemp(join(tmpdir(), "project-kanban-template-test-"));
   await cp(join(sourceRoot, "project-kanban.config.json"), join(root, "project-kanban.config.json"));
@@ -95,10 +100,146 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
   assert.doesNotMatch(auditText, /\| RA-002 \|/);
 });
 
+test("keeps source task IDs monotonic when the highest ID is deleted", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  let board = await readBoardSnapshot(root, config);
+  board = await deleteTaskInDocuments(root, config, {
+    taskId: "RM-002",
+    confirmed: true,
+    revisions: board.revisions,
+  });
+
+  let roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:3 -->/);
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Avoid reusing deleted IDs",
+      area: "Testing",
+      priority: "High",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  assert.ok(board.tasks.some(({ id }) => id === "RM-003"));
+
+  board = await deleteTaskInDocuments(root, config, {
+    taskId: "RM-003",
+    confirmed: true,
+    revisions: board.revisions,
+  });
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Continue the monotonic sequence",
+      area: "Testing",
+      priority: "Medium",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  assert.ok(board.tasks.some(({ id }) => id === "RM-004"));
+  roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:5 -->/);
+});
+
+test("keeps creation and latest completion dates independent across the task lifecycle", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  let board = await readBoardSnapshot(root, config);
+  assert.equal(board.tasks.find(({ id }) => id === "RM-001").createdDate, "");
+  assert.equal(board.tasks.find(({ id }) => id === "RM-001").completionDate, "");
+
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Track independent lifecycle dates",
+      area: "Testing",
+      priority: "High",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  let task = board.tasks.find(({ title }) => title === "Track independent lifecycle dates");
+  assert.equal(task.createdDate, todayDateOnly());
+  assert.equal(task.completionDate, "");
+
+  board = await moveTaskInDocuments(root, config, {
+    taskId: task.id,
+    status: "Complete",
+    order: 300,
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.createdDate, todayDateOnly());
+  assert.equal(task.completionDate, todayDateOnly());
+
+  board = await moveTaskInDocuments(root, config, {
+    taskId: task.id,
+    status: "Planned",
+    order: 400,
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.createdDate, todayDateOnly());
+  assert.equal(task.completionDate, todayDateOnly());
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: "TD-01",
+    updates: { status: "Complete" },
+    revisions: board.revisions,
+  });
+  assert.equal(board.tasks.find(({ id }) => id === "TD-01").completionDate, todayDateOnly());
+
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Record direct completion",
+      area: "Testing",
+      priority: "Medium",
+      status: "Complete",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  const directlyCompleted = board.tasks.find(({ title }) => title === "Record direct completion");
+  assert.equal(directlyCompleted.createdDate, todayDateOnly());
+  assert.equal(directlyCompleted.completionDate, todayDateOnly());
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { completionDate: "2020-01-01" },
+    revisions: board.revisions,
+  });
+  assert.equal(board.tasks.find(({ id }) => id === task.id).completionDate, "2020-01-01");
+
+  board = await moveTaskInDocuments(root, config, {
+    taskId: task.id,
+    status: "Complete",
+    order: 400,
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.createdDate, todayDateOnly());
+  assert.equal(task.completionDate, todayDateOnly());
+
+  await assert.rejects(
+    editTaskInDocuments(root, config, {
+      taskId: task.id,
+      updates: { createdDate: "2025-02-30" },
+      revisions: board.revisions,
+    }),
+    (error) => error instanceof BoardStorageError && error.code === "board_input_invalid",
+  );
+});
+
 test("uses the independent project's configured IDs, statuses, and required extra fields", async (t) => {
   const exampleRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
   const { root, config } = await createWorkspace(t, exampleRoot);
   const board = await readBoardSnapshot(root, config);
+  assert.equal(board.tasks.find(({ id }) => id === "EXP-001").createdDate, "");
   const created = await createTaskInDocuments(root, config, {
     sourceType: "experiments",
     task: {
@@ -111,7 +252,10 @@ test("uses the independent project's configured IDs, statuses, and required extr
     },
     revisions: board.revisions,
   });
-  assert.ok(created.tasks.some(({ id, status }) => id === "EXP-002" && status === "Open"));
+  const createdTask = created.tasks.find(({ id }) => id === "EXP-002");
+  assert.equal(createdTask.status, "Open");
+  assert.equal(createdTask.createdDate, todayDateOnly());
+  assert.equal(createdTask.completionDate, "");
 
   await assert.rejects(
     createTaskInDocuments(root, config, {

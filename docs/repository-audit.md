@@ -16,6 +16,6 @@ Actionable follow-ups belong in the table. If another source already owns the wo
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->
-| ID | Title | Status | Priority | Order | Area | Category | Details |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| RA-001 | Verify supported-host extension loading | Planned | Medium | 100 | Compatibility | Research/Audit | Validate the workspace extension contract in each intended Copilot host. |
+| ID | Title | Status | Priority | Order | Area | Category | Details | Created Date | Completion Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| RA-001 | Verify supported-host extension loading | Planned | Medium | 100 | Compatibility | Research/Audit | Validate the workspace extension contract in each intended Copilot host. | | |

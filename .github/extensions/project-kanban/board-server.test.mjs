@@ -32,6 +32,10 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
   assert.equal(created.status, 200);
   assert.deepEqual(await created.json(), { created: "Returns tab" });
 
+  const viewModule = await fetch(`${origin}/board-view.mjs`);
+  assert.equal(viewModule.status, 200);
+  assert.match(await viewModule.text(), /export function filterTasks/);
+
   const stale = await fetch(`${origin}/api/tasks/move`, {
     method: "POST",
     headers: { Origin: origin, "Content-Type": "application/json" },

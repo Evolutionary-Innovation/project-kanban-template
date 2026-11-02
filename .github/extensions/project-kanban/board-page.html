@@ -29,15 +29,54 @@
       </header>
 
       <div class="board-toolbar">
-        <p id="status" role="status" aria-live="polite" aria-atomic="true">Loading project documents…</p>
         <p class="board-key"><span class="key-dot" aria-hidden="true"></span> Status, priority, category, and order are Markdown-backed</p>
       </div>
 
+      <section class="view-toolbar" aria-label="Board search and filters">
+        <label class="view-field search-field">
+          Search tasks
+          <input id="task-search" type="search" autocomplete="off" placeholder="Title, details, rationale, recommendations…" />
+        </label>
+        <label class="view-field">
+          Source
+          <select id="source-filter"><option value="">All sources</option></select>
+        </label>
+        <label class="view-field">
+          Priority
+          <select id="priority-filter"><option value="">All priorities</option></select>
+        </label>
+        <label class="view-field">
+          Category
+          <select id="category-filter"><option value="">All categories</option></select>
+        </label>
+        <label class="view-field">
+          Area
+          <select id="area-filter"><option value="">All areas</option></select>
+        </label>
+        <div class="view-actions">
+          <button id="clear-filters" class="secondary-button" type="button">Clear</button>
+          <button id="collapse-all" class="secondary-button" type="button">Collapse all</button>
+          <button id="expand-all" class="secondary-button" type="button">Expand all</button>
+        </div>
+      </section>
+      <p id="ordering-hint" class="ordering-hint" hidden>
+        Manual reorder is disabled while search or filters hide cards, or while a column uses a non-manual sort.
+      </p>
+
       <div id="board" class="board" aria-label="Project Kanban board"></div>
 
-      <footer class="page-footer">
-        <p>Source documents: <span id="sources">loading…</span></p>
-        <p>Priority colors and category badges are configured for this project.</p>
+      <footer class="page-footer" aria-label="Board status and source information">
+        <div class="footer-status">
+          <p id="status" role="status" aria-live="polite" aria-atomic="true">Loading project documents…</p>
+          <p id="board-statistics">Loading task counts…</p>
+        </div>
+        <p id="last-updated">Last refreshed: waiting for Markdown…</p>
+        <details class="source-details">
+          <summary>Source documents and revisions</summary>
+          <p id="sources">loading…</p>
+          <p id="revision-info"></p>
+        </details>
+        <p class="footer-note">Priority colors and category badges are configured for this project.</p>
       </footer>
       <dialog id="task-dialog" class="task-dialog" aria-labelledby="task-dialog-title">
         <div class="dialog-panel">

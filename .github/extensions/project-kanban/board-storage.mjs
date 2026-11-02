@@ -5,7 +5,9 @@ import {
   allocateTaskId,
   appendTaskRecord,
   deleteTaskRecord,
+  ensureTaskIdSequence,
   hasCanonicalTaskTable,
+  isValidDateOnly,
   migrateLegacyMarkdown,
   nextTaskOrder,
   parseBoardDocuments,
@@ -172,6 +174,15 @@ function validateEditRequest(input, config) {
     if (field !== "status" && field !== "priority" && typeof value !== "string") {
       throw new BoardStorageError("board_input_invalid", `${field} must be a string.`);
     }
+    const dateField = config.sources
+      .flatMap(({ extraFields }) => extraFields)
+      .find(({ key, type }) => key === field && type === "date");
+    if (dateField && value !== "" && !isValidDateOnly(value)) {
+      throw new BoardStorageError(
+        "board_input_invalid",
+        `${dateField.label} must be a valid YYYY-MM-DD date.`,
+      );
+    }
   }
 }
 
@@ -265,13 +276,21 @@ async function withLockedDocuments(workspaceRoot, config, revisions, mutate) {
 
 function canonicalMarkdown(documents, board, source, config) {
   const markdown = documents[source.path];
-  if (hasCanonicalTaskTable(markdown, source, config)) return markdown;
+  let canonical = markdown;
   const tasks = board.tasks.filter(({ source: taskSource }) => taskSource.document === source.path);
+  if (!hasCanonicalTaskTable(markdown, source, config)) {
+    try {
+      canonical = migrateLegacyMarkdown(markdown, source, tasks, config);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown migration error.";
+      throw new BoardStorageError("board_migration_failed", `Unable to migrate ${source.path}: ${message}`);
+    }
+  }
   try {
-    return migrateLegacyMarkdown(markdown, source, tasks, config);
+    return ensureTaskIdSequence(canonical, tasks, source, config);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown migration error.";
-    throw new BoardStorageError("board_migration_failed", `Unable to migrate ${source.path}: ${message}`);
+    const message = error instanceof Error ? error.message : "Unknown task ID sequence error.";
+    throw new BoardStorageError("board_id_sequence_invalid", `Unable to initialize task IDs for ${source.path}: ${message}`);
   }
 }
 
@@ -283,15 +302,37 @@ function findTask(board, taskId, config) {
   return { task, source };
 }
 
+function currentDateOnly() {
+  const now = new Date();
+  const year = String(now.getFullYear()).padStart(4, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function completionDateFor(task, status, source, config) {
+  if (
+    status !== config.completionStatus ||
+    task.status === status ||
+    !source.extraFields.some(({ key, type }) => key === "completionDate" && type === "date")
+  ) {
+    return null;
+  }
+  return currentDateOnly();
+}
+
 export async function moveTaskInDocuments(workspaceRoot, config, input) {
   validateMoveRequest(input, config);
   return withLockedDocuments(workspaceRoot, config, input.revisions, (documents, board) => {
     const { task, source } = findTask(board, input.taskId, config);
     const markdown = canonicalMarkdown(documents, board, source, config);
+    const completionDate = completionDateFor(task, input.status, source, config);
+    const updates = { status: input.status, order: input.order };
+    if (completionDate) updates.completionDate = completionDate;
     try {
       return {
         source,
-        markdown: updateTaskRecord(markdown, task.id, { status: input.status, order: input.order }, source, config),
+        markdown: updateTaskRecord(markdown, task.id, updates, source, config),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown row update error.";
@@ -304,12 +345,21 @@ export async function createTaskInDocuments(workspaceRoot, config, input) {
   const draft = validateCreateRequest(input, config);
   const source = config.sources.find(({ key }) => key === input.sourceType);
   return withLockedDocuments(workspaceRoot, config, input.revisions, (documents, board) => {
+    const markdown = canonicalMarkdown(documents, board, source, config);
+    if (
+      source.extraFields.some(({ key, type }) => key === "createdDate" && type === "date") &&
+      !draft.createdDate
+    ) {
+      draft.createdDate = currentDateOnly();
+    }
+    if (config.completionStatus === draft.status && !draft.completionDate) {
+      draft.completionDate = currentDateOnly();
+    }
     const task = {
       ...draft,
-      id: allocateTaskId(source.key, board.tasks, config),
+      id: allocateTaskId(source.key, board.tasks, config, markdown),
       order: nextTaskOrder(board.tasks, draft.status),
     };
-    const markdown = canonicalMarkdown(documents, board, source, config);
     try {
       return { source, markdown: appendTaskRecord(markdown, task, source, config) };
     } catch (error) {
@@ -324,10 +374,16 @@ export async function editTaskInDocuments(workspaceRoot, config, input) {
   return withLockedDocuments(workspaceRoot, config, input.revisions, (documents, board) => {
     const { task, source } = findTask(board, input.taskId, config);
     const markdown = canonicalMarkdown(documents, board, source, config);
+    const completionDate = input.updates.completionDate === undefined
+      ? completionDateFor(task, input.updates.status, source, config)
+      : null;
+    const updates = completionDate
+      ? { ...input.updates, completionDate }
+      : input.updates;
     try {
       return {
         source,
-        markdown: updateTaskRecord(markdown, task.id, input.updates, source, config),
+        markdown: updateTaskRecord(markdown, task.id, updates, source, config),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown row update error.";

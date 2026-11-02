@@ -16,6 +16,7 @@
     { "name": "Low", "tone": "low" }
   ],
   "defaultStatus": "Planned",
+  "completionStatus": "Complete",
   "sources": [
     {
       "key": "roadmap",
@@ -25,7 +26,10 @@
       "idWidth": 3,
       "category": "Roadmap",
       "categoryTone": "blue",
-      "extraFields": []
+      "extraFields": [
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
     },
     {
       "key": "technicalDebt",
@@ -38,7 +42,9 @@
       "extraFields": [
         { "key": "limitation", "label": "Limitation", "type": "textarea" },
         { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
-        { "key": "rationale", "label": "Rationale", "type": "textarea" }
+        { "key": "rationale", "label": "Rationale", "type": "textarea" },
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
       ]
     },
     {
@@ -49,7 +55,10 @@
       "idWidth": 3,
       "category": "Research/Audit",
       "categoryTone": "green",
-      "extraFields": []
+      "extraFields": [
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
     }
   ]
 }

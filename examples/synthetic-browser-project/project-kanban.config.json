@@ -1,0 +1,70 @@
+{
+  "configVersion": 1,
+  "projectName": "Synthetic Browser Project",
+  "boardTitle": "Synthetic UX Test Board",
+  "schemaMarker": "<!-- project-kanban-schema:1 -->",
+  "statuses": [
+    "Complete",
+    "In Progress",
+    "Planned",
+    "Research",
+    "Future Ideas"
+  ],
+  "priorities": [
+    { "name": "High", "tone": "high" },
+    { "name": "Medium", "tone": "medium" },
+    { "name": "Low", "tone": "low" }
+  ],
+  "defaultStatus": "Planned",
+  "completionStatus": "Complete",
+  "sources": [
+    {
+      "key": "roadmap",
+      "label": "Roadmap",
+      "path": "docs/roadmap.md",
+      "idPrefix": "RM",
+      "idWidth": 3,
+      "category": "Delivery",
+      "categoryTone": "blue",
+      "extraFields": [
+        { "key": "rationale", "label": "Rationale", "type": "textarea" },
+        { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
+    },
+    {
+      "key": "technicalDebt",
+      "label": "Technical Debt",
+      "path": "docs/technical-debt.md",
+      "idPrefix": "TD",
+      "idWidth": 2,
+      "category": "Reliability",
+      "categoryTone": "purple",
+      "extraFields": [
+        { "key": "limitation", "label": "Limitation", "type": "textarea" },
+        { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
+        { "key": "rationale", "label": "Rationale", "type": "textarea" },
+        { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
+    },
+    {
+      "key": "repositoryAudit",
+      "label": "Research/Audit",
+      "path": "docs/repository-audit.md",
+      "idPrefix": "RA",
+      "idWidth": 3,
+      "category": "Research",
+      "categoryTone": "green",
+      "extraFields": [
+        { "key": "evidence", "label": "Evidence", "type": "textarea" },
+        { "key": "rationale", "label": "Rationale", "type": "textarea" },
+        { "key": "recommendations", "label": "Recommendations", "type": "textarea" },
+        { "key": "createdDate", "label": "Created Date", "type": "date" },
+        { "key": "completionDate", "label": "Completion Date", "type": "date" }
+      ]
+    }
+  ]
+}

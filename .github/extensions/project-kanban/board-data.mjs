@@ -61,6 +61,52 @@ function taskIdPattern(source) {
   return new RegExp(`^(?:${patterns.join("|")})$`);
 }
 
+function taskIdSequenceMarker(source, nextValue) {
+  return `<!-- project-kanban-id-sequence:${source.idPrefix}:${nextValue} -->`;
+}
+
+function readTaskIdSequence(markdown, source) {
+  const lines = markdown.split(/\r?\n/);
+  const markerLines = lines
+    .map((line, index) => ({ line: line.trim(), index }))
+    .filter(({ line }) => line.startsWith("<!-- project-kanban-id-sequence:"));
+  if (markerLines.length > 1) {
+    throw new Error(`${source.path}: only one task ID sequence marker is allowed.`);
+  }
+  if (markerLines.length === 0) return null;
+
+  const { line, index } = markerLines[0];
+  const match = line.match(new RegExp(`^<!-- project-kanban-id-sequence:${source.idPrefix}:(\\d+) -->$`));
+  if (!match) {
+    throw new Error(`${source.path}: the task ID sequence marker does not match ${source.idPrefix}.`);
+  }
+  const nextValue = Number(match[1]);
+  if (!Number.isSafeInteger(nextValue) || nextValue < 1) {
+    throw new Error(`${source.path}: the next task ID sequence value is invalid.`);
+  }
+  return { index, nextValue };
+}
+
+function maximumTaskIdSequence(tasks, source) {
+  const pattern = new RegExp(`^${source.idPrefix}-(\\d{${source.idWidth},})$`);
+  return tasks.reduce((maximum, task) => {
+    const match = task.id.match(pattern);
+    if (!match) return maximum;
+    const value = Number(match[1]);
+    return Number.isSafeInteger(value) ? Math.max(maximum, value) : maximum;
+  }, 0);
+}
+
+export function validateTaskIdSequence(markdown, source) {
+  readTaskIdSequence(markdown, source);
+}
+
+export function isValidDateOnly(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function validateTask(task, source, config) {
   for (const field of ["id", "title", "area", "category"]) {
     if (typeof task[field] !== "string" || task[field].trim() === "") {
@@ -84,7 +130,11 @@ function validateTask(task, source, config) {
   }
   for (const field of source.extraFields) {
     const value = task[field.key];
-    if (typeof value !== "string" || value.length > field.maxLength) {
+    if (
+      typeof value !== "string" ||
+      value.length > field.maxLength ||
+      (field.type === "date" && value !== "" && !isValidDateOnly(value))
+    ) {
       throw new Error(`${source.path}: ${task.id} has invalid ${field.label}.`);
     }
   }
@@ -167,6 +217,7 @@ function buildBoard(tasks, config) {
       priorities: config.priorities,
       sources: config.sources,
       defaultStatus: config.defaultStatus,
+      ...(config.completionStatus !== undefined ? { completionStatus: config.completionStatus } : {}),
     },
     schemaVersion: TASK_SCHEMA_VERSION,
   };
@@ -180,6 +231,7 @@ export function parseBoardDocuments(documents, config) {
   const parsedSources = config.sources.map((source) => {
     const markdown = documents[source.path];
     requireText(markdown, source.path);
+    validateTaskIdSequence(markdown, source);
     return { source, markdown, schema: findSchemaTable(markdown, source, config) };
   });
   const legacySources = parsedSources.filter(({ schema }) => !schema);
@@ -195,7 +247,20 @@ export function parseBoardDocuments(documents, config) {
     }
     const adapter = getLegacyAdapter([...adapterNames][0]);
     const legacyPaths = new Set(legacySources.map(({ source }) => source.path));
-    tasks.push(...adapter.parse(documents, config).filter((task) => legacyPaths.has(task.source.document)));
+    tasks.push(
+      ...adapter
+        .parse(documents, config)
+        .filter((task) => legacyPaths.has(task.source.document))
+        .map((task) => {
+          const source = config.sources.find(({ path }) => path === task.source.document);
+          const dateFields = Object.fromEntries(
+            source.extraFields
+              .filter(({ type }) => type === "date")
+              .map(({ key }) => [key, task[key] ?? ""]),
+          );
+          return { ...task, ...dateFields };
+        }),
+    );
   }
 
   const sourcePaths = new Set(config.sources.map(({ path }) => path));
@@ -214,6 +279,40 @@ export function parseBoardDocuments(documents, config) {
 
 export function hasCanonicalTaskTable(markdown, source, config) {
   return findSchemaTable(markdown, source, config) !== null;
+}
+
+function addConfiguredExtraFields(markdown, source, config) {
+  const lines = markdown.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => line.trim() === SCHEMA_HEADING);
+  if (headingIndex === -1) throw new Error(`${source.path}: a canonical task table is required for migration.`);
+  const markerIndex = lines.findIndex(
+    (line, index) => index > headingIndex && line.trim() === config.schemaMarker,
+  );
+  if (markerIndex === -1) throw new Error(`${source.path}: the migrated task table has no schema marker.`);
+  let headerRow = markerIndex + 1;
+  while (headerRow < lines.length && !lines[headerRow].trim().startsWith("|")) headerRow += 1;
+  if (headerRow >= lines.length) throw new Error(`${source.path}: the migrated task table has no header.`);
+  const headers = splitMarkdownRow(lines[headerRow]);
+  const knownFields = new Set(headers.map(fieldName));
+  const missingFields = source.extraFields.filter(({ key }) => !knownFields.has(key));
+  if (missingFields.length === 0) return markdown;
+
+  const separatorRow = headerRow + 1;
+  const separator = splitMarkdownRow(lines[separatorRow]);
+  if (separator.length !== headers.length || !separator.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+    throw new Error(`${source.path}: cannot add configured fields to an invalid task table.`);
+  }
+  const originalColumnCount = headers.length;
+  lines[headerRow] = formatMarkdownRow([...headers, ...missingFields.map(({ label }) => label)]);
+  lines[separatorRow] = formatMarkdownRow([...separator, ...missingFields.map(() => "---")]);
+  for (let index = separatorRow + 1; index < lines.length && lines[index].trim().startsWith("|"); index += 1) {
+    const cells = splitMarkdownRow(lines[index]);
+    if (cells.length !== originalColumnCount) {
+      throw new Error(`${source.path}: cannot add configured fields to a malformed task row.`);
+    }
+    lines[index] = formatMarkdownRow([...cells, ...missingFields.map(() => "")]);
+  }
+  return lines.join("\n");
 }
 
 function headerIndex(headers, key) {
@@ -236,6 +335,46 @@ function tableLayout(markdown, source, config) {
   let insertionIndex = headerRow + 2;
   while (insertionIndex < limit && lines[insertionIndex].trim().startsWith("|")) insertionIndex += 1;
   return { lines, headers: schema.headers, headerRow, insertionIndex };
+}
+
+export function ensureTaskIdSequence(markdown, tasks, source, config) {
+  const existing = readTaskIdSequence(markdown, source);
+  const maximum = maximumTaskIdSequence(tasks, source);
+  const nextValue = Math.max(maximum + 1, existing?.nextValue ?? 1);
+  if (!Number.isSafeInteger(nextValue)) {
+    throw new Error(`${source.path}: no safe task ID sequence value remains.`);
+  }
+  if (existing) {
+    if (existing.nextValue === nextValue) return markdown;
+    const lines = markdown.split(/\r?\n/);
+    lines[existing.index] = taskIdSequenceMarker(source, nextValue);
+    return lines.join("\n");
+  }
+  const { lines, insertionIndex } = tableLayout(markdown, source, config);
+  lines.splice(insertionIndex, 0, taskIdSequenceMarker(source, nextValue));
+  return lines.join("\n");
+}
+
+function advanceTaskIdSequence(markdown, task, source, config) {
+  const idPattern = new RegExp(`^${source.idPrefix}-(\\d{${source.idWidth},})$`);
+  const match = task.id.match(idPattern);
+  if (!match) throw new Error(`${source.path}: cannot reserve a sequence for invalid task ID "${task.id}".`);
+  const allocatedValue = Number(match[1]);
+  const existing = readTaskIdSequence(markdown, source);
+  const nextValue = Math.max(existing?.nextValue ?? 1, allocatedValue + 1);
+  if (!Number.isSafeInteger(nextValue)) {
+    throw new Error(`${source.path}: no safe task ID sequence value remains.`);
+  }
+
+  const lines = markdown.split(/\r?\n/);
+  if (existing) {
+    lines[existing.index] = taskIdSequenceMarker(source, nextValue);
+  } else {
+    const layout = tableLayout(markdown, source, config);
+    layout.lines.splice(layout.insertionIndex, 0, taskIdSequenceMarker(source, nextValue));
+    return layout.lines.join("\n");
+  }
+  return lines.join("\n");
 }
 
 function allFieldKeys(source) {
@@ -277,7 +416,12 @@ export function updateTaskRecord(markdown, taskId, updates, source, config) {
       const fieldConfig = source.extraFields.find(({ key }) => key === field);
       const maxLength = fieldConfig?.maxLength ?? (field === "title" ? 200 : field === "area" || field === "category" ? 100 : 5000);
       const required = ["title", "area", "category"].includes(field) || fieldConfig?.required;
-      if (typeof value !== "string" || (required && value.trim() === "") || value.length > maxLength) {
+      if (
+        typeof value !== "string" ||
+        (required && value.trim() === "") ||
+        value.length > maxLength ||
+        (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value))
+      ) {
         throw new TypeError(`${field} is empty or exceeds its maximum length.`);
       }
     }
@@ -308,9 +452,13 @@ export function validateTaskDraft(sourceKey, draft, config) {
   }
 
   const fields = ["title", "area", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)];
+  const requiredFields = fields.filter((field) => {
+    const configField = source.extraFields.find(({ key }) => key === field);
+    return configField?.type !== "date" || configField.required;
+  });
   const keys = Object.keys(draft);
-  if (keys.length !== fields.length || keys.some((field) => !fields.includes(field))) {
-    throw new TypeError(`Task fields must contain exactly: ${fields.join(", ")}.`);
+  if (requiredFields.some((field) => !Object.hasOwn(draft, field)) || keys.some((field) => !fields.includes(field))) {
+    throw new TypeError(`Task fields must include: ${requiredFields.join(", ")} and no unsupported fields.`);
   }
   if (typeof draft.title !== "string" || draft.title.trim() === "" || draft.title.length > 200) {
     throw new TypeError("Title must be a non-empty string of at most 200 characters.");
@@ -324,32 +472,34 @@ export function validateTaskDraft(sourceKey, draft, config) {
   if (!config.statuses.includes(draft.status)) throw new TypeError("Status is not supported.");
   for (const field of ["details", ...source.extraFields.map(({ key }) => key)]) {
     const fieldConfig = source.extraFields.find(({ key }) => key === field);
-    const value = draft[field];
+    const value = draft[field] ?? "";
     if (
       typeof value !== "string" ||
       value.length > (fieldConfig?.maxLength ?? 5000) ||
-      (fieldConfig?.required && value.trim() === "")
+      (fieldConfig?.required && value.trim() === "") ||
+      (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value))
     ) {
       throw new TypeError(`${fieldConfig?.label ?? "Details"} is empty or exceeds its maximum length.`);
     }
   }
 
   return {
-    ...Object.fromEntries(fields.map((field) => [field, draft[field].trim()])),
+    ...Object.fromEntries(fields.map((field) => [field, (draft[field] ?? "").trim()])),
     category: source.category,
     source: { document: source.path, section: "Kanban tasks", schemaVersion: TASK_SCHEMA_VERSION },
   };
 }
 
-export function allocateTaskId(sourceKey, tasks, config) {
+export function allocateTaskId(sourceKey, tasks, config, markdown = "") {
   const source = config.sources.find(({ key }) => key === sourceKey);
   if (!source) throw new TypeError(`Unsupported task source "${sourceKey}".`);
-  const pattern = new RegExp(`^${source.idPrefix}-\\d{${source.idWidth},}$`);
-  const maximum = tasks.reduce((max, task) => {
-    if (!pattern.test(task.id)) return max;
-    return Math.max(max, Number(task.id.slice(source.idPrefix.length + 1)));
-  }, 0);
-  return `${source.idPrefix}-${String(maximum + 1).padStart(source.idWidth, "0")}`;
+  const maximum = maximumTaskIdSequence(tasks, source);
+  const sequence = markdown ? readTaskIdSequence(markdown, source) : null;
+  const nextValue = Math.max(maximum + 1, sequence?.nextValue ?? 1);
+  if (!Number.isSafeInteger(nextValue)) {
+    throw new TypeError(`No safe task ID remains for source "${source.key}".`);
+  }
+  return `${source.idPrefix}-${String(nextValue).padStart(source.idWidth, "0")}`;
 }
 
 export function nextTaskOrder(tasks, status) {
@@ -367,7 +517,7 @@ function formatTaskRow(task, headers) {
 export function appendTaskRecord(markdown, task, source, config) {
   const { lines, headers, insertionIndex } = tableLayout(markdown, source, config);
   lines.splice(insertionIndex, 0, formatTaskRow(task, headers));
-  return lines.join("\n");
+  return advanceTaskIdSequence(lines.join("\n"), task, source, config);
 }
 
 export function deleteTaskRecord(markdown, taskId, source, config) {
@@ -390,5 +540,5 @@ export function migrateLegacyMarkdown(markdown, source, tasks, config) {
     throw new Error(`${source.path}: legacy Markdown requires an explicitly configured adapter.`);
   }
   const adapter = getLegacyAdapter(source.legacyAdapter);
-  return adapter.migrate(markdown, source, tasks, config);
+  return addConfiguredExtraFields(adapter.migrate(markdown, source, tasks, config), source, config);
 }

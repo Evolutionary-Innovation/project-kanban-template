@@ -60,6 +60,7 @@ async function readAssets() {
     ["board-page.html", "text/html; charset=utf-8"],
     ["board.css", "text/css; charset=utf-8"],
     ["board-client.js", "text/javascript; charset=utf-8"],
+    ["board-view.mjs", "text/javascript; charset=utf-8"],
   ];
   const assets = new Map();
 
@@ -80,6 +81,7 @@ export async function createBoardRequestHandler({ loadBoard, moveTask, createTas
     ["/", "board-page.html"],
     ["/board.css", "board.css"],
     ["/board-client.js", "board-client.js"],
+    ["/board-view.mjs", "board-view.mjs"],
   ]);
   const mutationRoutes = new Map([
     ["/api/tasks/move", moveTask],

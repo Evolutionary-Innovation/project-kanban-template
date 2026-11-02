@@ -44,7 +44,7 @@ The canvas reads documents configured in `project-kanban.config.json`. Each conf
 
 The default template config uses the same columns across Roadmap, Technical Debt, and Research/Audit. Fields after Category are optional; projects may configure only the fields they use, but each source in one project should share its configured field contract. `Blocked By` is derived from `Depends On` and is not stored as a separate column. Keep field keys and labels aligned with config.
 
-Store the title text as it should read on the card; do not prepend a category or source label or append a duplicate task ID. The board displays the title verbatim and omits the source ID label when the title already begins with `<ID>: `.
+Store the title text as it should read on the card; do not prepend a category or source label or append a duplicate task ID. The board formats a single `ID: Title` heading and removes configured prefixes and duplicate IDs for display only, without rewriting the task record.
 
 Use configured status and priority values exactly. IDs are stable and must not be reused after deletion. Order values should be increasing within a status; the canvas assigns new values automatically. Do not move one task's source ownership by hand.
 
@@ -52,9 +52,9 @@ The extension stores each source's next task ID in a `<!-- project-kanban-id-seq
 
 Lifecycle dates are configured independently as `createdDate` and `completionDate` extra fields with type `date` on each source. Existing projects keep schema v1 by adding desired fields to each source config and table header. When configured, `createdDate` is filled on task creation; do not invent dates for historical records. `completionDate` is set on creation in the configured completion status or on every transition into it, so the latest completion wins; it remains unchanged when reopened and can be manually corrected. The board displays `Added` for active tasks and `Completed` for completed tasks, omitting unknown dates; a reopened task also shows its retained `Last completed` date.
 
-Card presentation uses this hierarchy: display-only `ID: Title`, one Category badge, populated configured content sections, dependency relationships, then a subtle lifecycle footer. The renderer removes configured source/category prefixes and duplicate IDs from the displayed title without rewriting the Markdown title. It does not show redundant Status, Priority, Area, source-filename, or second-ID labels; priority remains indicated by the card border.
+Card presentation uses this hierarchy: display-only `ID: Title`, Category and Area badges, populated configured content sections, dependency relationships, then a subtle lifecycle footer. The renderer removes configured source/category prefixes and duplicate IDs from the displayed title without rewriting the Markdown title. It does not show redundant Status, Priority, source-filename, or second-ID labels; priority remains indicated by the card border.
 
-Details and configured populated fields are rendered independently using their configured labels. Empty fields remain omitted. Dependency sections follow content sections and remain visible when the card is collapsed. Lifecycle dates follow relationships and also remain visible when collapsed; display only known dates. Collapse hides Details and configured content fields, retaining the title, category, dependency summary, and lifecycle date.
+Details and configured populated fields are rendered independently using their configured labels. Empty fields remain omitted. Dependency sections follow content sections and remain visible when the card is collapsed. Lifecycle dates follow relationships and also remain visible when collapsed; display only known dates. Collapse hides Details and configured content fields, retaining the title, category/area, dependency summary, and lifecycle date.
 
 `Execution Type` remains editable, searchable metadata but is not part of the compact card summary.
 
@@ -69,6 +69,10 @@ Search covers task IDs, titles, details, configured fields, and dependency refer
 Manual drag and keyboard reordering are disabled while search or filters hide tasks, or while that column uses a non-manual sort. Clear the view filters and select Manual order to reorder. A task's Status control remains available to move it to the end of another status column.
 
 The sticky board status footer reports the current visible/total task counts and refresh time. Source paths and shortened revision hashes remain available in its disclosure; the full revision hashes continue to protect writes.
+
+Kanban remains the default editing interface. The secondary Dependencies graph is a read-only whole-project projection, including isolated tasks and labelled unresolved-reference placeholders. Arrows mean prerequisite to dependent; blocker styling and cycle warnings describe existing derived facts. Compact nodes show ID, short title, Status and warnings; full metadata/content belongs in the inspector and accessible relationship list. Do not copy graph coordinates or reciprocal edges into Markdown.
+
+In the initial graph stage, search/filter settings, column sorts and collapse state are preserved but apply only in Kanban. Graph selection/zoom is ephemeral. Refresh uses the same snapshot and must visibly report failures, not present a stale graph as current. Dependency-unblocked must not be described as Ready or as permission to execute work. Focus mode, shared graph filtering and graph-launched editing remain separate follow-up work.
 
 Canonical schema-v1 tables may be read even when they predate configured optional columns. Missing values are treated as blank. The first subsequent mutation normalizes that source table to its configured column order within the existing locked, revision-checked, atomic write; it does not infer historical values or rewrite surrounding narrative.
 

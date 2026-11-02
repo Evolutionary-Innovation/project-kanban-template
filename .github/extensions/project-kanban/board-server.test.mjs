@@ -73,6 +73,7 @@ test("rejects cross-origin and non-JSON mutations before calling handlers", asyn
     editTask: async () => ({ ok: true }),
     deleteTask: async () => ({ ok: true }),
   });
+
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   context.after(() => new Promise((resolve, reject) => {
@@ -104,4 +105,40 @@ test("rejects cross-origin and non-JSON mutations before calling handlers", asyn
   });
   assert.equal(oversized.status, 400);
   assert.equal(called, false);
+});
+
+test("serves only allowlisted graph modules locally without mutations or relaxed script policy", async (context) => {
+  let mutations = 0;
+  const mutate = async () => { mutations += 1; return {}; };
+  const handler = await createBoardRequestHandler({
+    loadBoard: async () => ({ tasks: [] }),
+    moveTask: mutate, createTask: mutate, editTask: mutate, deleteTask: mutate,
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections?.();
+  }));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  for (const asset of [
+    "board-graph.mjs", "board-graph-client.js", "board-graph-worker.mjs",
+    "vendor/dagre-3.1.3.mjs",
+  ]) {
+    const response = await fetch(`${origin}/${asset}?attempt=2`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /^text\/javascript/);
+    const policy = response.headers.get("content-security-policy");
+    assert.match(policy, /worker-src 'self'/);
+    assert.match(policy, /script-src 'self';/);
+    assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval|https:/);
+    assert.ok((await response.text()).length > 100);
+  }
+  for (const path of ["/vendor/unknown.mjs", "/vendor/README.md", "/board-graph-client.js/extra", "/api/graph"]) {
+    assert.equal((await fetch(`${origin}${path}`)).status, 404);
+  }
+  const page = await (await fetch(origin)).text();
+  assert.match(page, /id="graph-panel"[^>]*hidden/);
+  assert.match(page, /id="show-kanban"[^>]*aria-pressed="true"/);
+  assert.equal(mutations, 0);
 });

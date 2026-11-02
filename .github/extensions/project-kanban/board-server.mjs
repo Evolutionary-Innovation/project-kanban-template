@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 const securityHeaders = {
   "Cache-Control": "no-store",
   "Content-Security-Policy":
-    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'",
+    "default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
 };
@@ -82,6 +82,10 @@ export async function createBoardRequestHandler({ loadBoard, moveTask, createTas
     ["/board.css", "board.css"],
     ["/board-client.js", "board-client.js"],
     ["/board-view.mjs", "board-view.mjs"],
+    ["/board-graph.mjs", "board-graph.mjs"],
+    ["/board-graph-client.js", "board-graph-client.js"],
+    ["/board-graph-worker.mjs", "board-graph-worker.mjs"],
+    ["/vendor/dagre-3.1.3.mjs", "vendor/dagre-3.1.3.mjs"],
   ]);
   const mutationRoutes = new Map([
     ["/api/tasks/move", moveTask],
@@ -146,7 +150,21 @@ export async function createBoardRequestHandler({ loadBoard, moveTask, createTas
       return;
     }
 
-    const asset = assets.get(assetName);
+    let asset = assets.get(assetName);
+    if (!asset) {
+      try {
+        asset = {
+          contentType: "text/javascript; charset=utf-8",
+          contents: await readFile(new URL(`./${assetName}`, import.meta.url)),
+        };
+        assets.set(assetName, asset);
+      } catch (error) {
+        sendJson(response, error?.code === "ENOENT" ? 404 : 500, {
+          error: "The dependency graph asset could not be loaded.",
+        });
+        return;
+      }
+    }
     send(response, 200, asset.contentType, asset.contents);
   };
 }

@@ -30,6 +30,10 @@
 
       <div class="board-toolbar">
         <p class="board-key"><span class="key-dot" aria-hidden="true"></span> Status, priority, category, and order are Markdown-backed</p>
+        <div class="board-view-switch" role="group" aria-label="Project view">
+          <button id="show-kanban" class="secondary-button" type="button" aria-pressed="true" aria-controls="board">Kanban</button>
+          <button id="show-graph" class="secondary-button" type="button" aria-pressed="false" aria-controls="graph-panel">Dependencies</button>
+        </div>
       </div>
 
       <section class="view-toolbar" aria-label="Board search and filters">
@@ -74,6 +78,38 @@
       </p>
 
       <div id="board" class="board" aria-label="Project Kanban board"></div>
+
+      <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading" hidden>
+        <h2 id="graph-heading" tabindex="-1">Project dependencies</h2>
+        <p>Whole-project view, including isolated tasks. Board search and filters apply only in Kanban; your settings are retained.</p>
+        <p id="graph-help">Arrows run from prerequisite to dependent: A &#8594; B means B depends on A. Select a node to inspect it. Use arrow keys or Home/End to navigate nodes, Enter to inspect, and Escape to return to the graph controls.</p>
+        <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Dashed nodes/arrows: unresolved references. Cycle warnings identify tasks, not every edge in a cycle.</p>
+        <div class="graph-controls" role="group" aria-label="Graph viewport">
+          <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit graph</button>
+          <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom in</button>
+          <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom out</button>
+          <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset zoom</button>
+          <output id="graph-zoom" aria-label="Graph zoom"></output>
+        </div>
+        <p id="graph-message" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div id="graph-error" class="graph-error" hidden>
+          <p id="graph-error-message"></p>
+          <button id="graph-retry" class="secondary-button" type="button">Retry graph</button>
+          <button id="graph-return" class="secondary-button" type="button">Return to Kanban</button>
+        </div>
+        <div class="graph-workspace">
+          <div id="graph-viewport" class="graph-viewport" tabindex="0" role="region" aria-label="Scrollable dependency diagram" aria-describedby="graph-help">
+            <svg id="graph-diagram" role="group" aria-label="Task dependency diagram" aria-describedby="graph-help"></svg>
+          </div>
+          <aside id="graph-inspector" class="graph-inspector" aria-label="Selected task information"></aside>
+        </div>
+        <section id="graph-warnings" class="graph-warnings" aria-label="Dependency warnings"></section>
+        <details class="graph-relationships">
+          <summary>Accessible task and relationship list</summary>
+          <p>Every task and unresolved reference is listed with its direct relationships. Select a title to inspect it in the diagram.</p>
+          <ul id="graph-task-list"></ul>
+        </details>
+      </section>
 
       <footer class="page-footer" aria-label="Board status and source information">
         <div class="footer-status">

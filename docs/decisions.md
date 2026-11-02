@@ -55,3 +55,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Embed model/provider names, automatically claim tasks on In Progress, or execute work on a status transition.
 - **Decision:** Configure `Execution Type` as optional choice metadata only. It does not claim tasks, launch agents, alter dependencies, or trigger status changes.
 - **Consequences:** Metadata remains portable across execution tools. Automated task execution requires a separately reviewed workflow and conflict/authorization design.
+
+## ADR-07: Keep dependency visualisation secondary, local and read-only
+
+- **Status:** Accepted
+- **Observations:** The snapshot already contains stable task nodes, prerequisite-to-dependent edges and diagnostics. SVG rendering is simple, but robust directed layout and cycle placement would add substantial custom algorithm maintenance. Larger synthetic layouts produce noticeable synchronous computation.
+- **Assumptions:** Kanban remains the primary editing view; users benefit from a whole-project overview including isolated tasks, with an accessible text alternative. No graph interaction authorizes work.
+- **Alternatives considered:** Handwritten DAG layout, custom force simulation, D3, Plotly, ELK.js and a graph framework. Force layouts obscure execution direction; chart/framework dependencies add unnecessary UI/runtime scope; handwritten layout would duplicate mature algorithms.
+- **Decision:** Render native SVG and HTML using a pinned MIT-licensed `@dagrejs/dagre` standalone distribution served locally in a same-origin module worker. Preserve original link directions and existing blocker/cycle facts. Keep task selection, zoom and cached coordinates ephemeral; do not persist a graph, layout or new fields. Pin provenance/checksums and both Dagre/graphlib licence notices, and retain offline template-copy operation.
+- **Consequences:** Initial graph delivery is read-only and whole-project; board filters remain Kanban-only until the next interaction stage. Graph clients/assets load lazily, and layout workers terminate after work or cancellation. The existing editor and transaction remain untouched. Ready-state policy, graph editing, focus/filter integration, claims and execution need separate implementation stages. Performance remains bounded by graph topology and SVG rendering even with worker-based layout.

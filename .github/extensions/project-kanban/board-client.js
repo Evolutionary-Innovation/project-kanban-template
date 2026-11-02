@@ -29,6 +29,15 @@ const boardStatistics = document.querySelector("#board-statistics");
 const lastUpdated = document.querySelector("#last-updated");
 const revisionInfo = document.querySelector("#revision-info");
 const orderingHint = document.querySelector("#ordering-hint");
+const graphPanel = document.querySelector("#graph-panel");
+const kanbanButton = document.querySelector("#show-kanban");
+const graphButton = document.querySelector("#show-graph");
+const viewToolbar = document.querySelector(".view-toolbar");
+let activeView = "kanban";
+let graphController = null;
+let graphModuleAttempt = 0;
+let graphViewGeneration = 0;
+let boardLoadError = "";
 let boardSnapshot = null;
 let draggedTaskId = null;
 let dialogMode = null;
@@ -73,6 +82,16 @@ function canReorderColumn(status) {
 
 function updateBoardSummary() {
   if (!boardSnapshot) return;
+  if (boardLoadError) {
+    boardStatistics.textContent = "Task counts unavailable.";
+    orderingHint.hidden = true;
+    return;
+  }
+  if (activeView === "graph") {
+    boardStatistics.textContent = `${boardSnapshot.tasks.length} tasks in the whole-project dependency view`;
+    orderingHint.hidden = true;
+    return;
+  }
   const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
   boardStatistics.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks shown`;
   orderingHint.hidden = !hasActiveFilters() && !boardSnapshot.config.statuses.some(
@@ -295,6 +314,7 @@ function renderBoard(payload) {
   }
 
   boardSnapshot = payload;
+  boardLoadError = "";
   const taskIds = new Set(payload.tasks.map(({ id }) => id));
   for (const taskId of collapsedTaskIds) {
     if (!taskIds.has(taskId)) collapsedTaskIds.delete(taskId);
@@ -327,6 +347,50 @@ function renderBoard(payload) {
   }`;
   updateBoardSummary();
   statusElement.textContent = `${payload.tasks.length} tasks loaded.`;
+  if (activeView === "graph") void renderGraph();
+}
+
+async function renderGraph() {
+  const request = ++graphViewGeneration;
+  try {
+    if (!graphController) {
+      const module = await import(`./board-graph-client.js?attempt=${++graphModuleAttempt}`);
+      if (request !== graphViewGeneration || activeView !== "graph") return;
+      graphController = module.createGraphController(graphPanel);
+    }
+    if (boardLoadError) {
+      graphController.fail(boardLoadError);
+      return;
+    }
+    if (!boardSnapshot) {
+      graphPanel.querySelector("#graph-message").textContent = "Load the Markdown board before viewing dependencies.";
+      return;
+    }
+    await graphController.render(boardSnapshot);
+  } catch (error) {
+    if (request !== graphViewGeneration || activeView !== "graph") return;
+    graphPanel.querySelector("#graph-error-message").textContent =
+      error instanceof Error ? error.message : "The graph module could not be loaded.";
+    graphPanel.querySelector("#graph-error").hidden = false;
+    graphPanel.querySelector("#graph-viewport").hidden = true;
+    graphPanel.querySelector("#graph-message").textContent = "Dependency graph unavailable.";
+  }
+}
+
+function setProjectView(view) {
+  activeView = view;
+  const graphVisible = view === "graph";
+  boardElement.hidden = graphVisible;
+  viewToolbar.hidden = graphVisible;
+  graphPanel.hidden = !graphVisible;
+  kanbanButton.setAttribute("aria-pressed", String(!graphVisible));
+  graphButton.setAttribute("aria-pressed", String(graphVisible));
+  updateBoardSummary();
+  if (graphVisible) void renderGraph();
+  else {
+    graphViewGeneration += 1;
+    graphController?.suspend();
+  }
 }
 
 function renderColumns(columns) {
@@ -788,6 +852,9 @@ async function refreshBoard() {
     }
     renderBoard(payload);
   } catch (error) {
+    boardLoadError = error instanceof Error ? error.message : "The board could not be loaded.";
+    graphViewGeneration += 1;
+    graphController?.fail(`Refresh from Markdown failed: ${boardLoadError}`);
     boardElement.replaceChildren();
     sourcesElement.textContent = "unavailable";
     boardStatistics.textContent = "Task counts unavailable.";
@@ -837,4 +904,11 @@ taskDialog.addEventListener("close", () => {
   dialogMode = null;
 });
 refreshButton.addEventListener("click", refreshBoard);
+kanbanButton.addEventListener("click", () => setProjectView("kanban"));
+graphButton.addEventListener("click", () => setProjectView("graph"));
+document.querySelector("#graph-return").addEventListener("click", () => {
+  setProjectView("kanban");
+  kanbanButton.focus();
+});
+document.querySelector("#graph-retry").addEventListener("click", () => void renderGraph());
 void refreshBoard();

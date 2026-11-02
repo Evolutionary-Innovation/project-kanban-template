@@ -8,6 +8,7 @@ The template's task state is maintained in the table below. See [architecture](a
 - Example configuration and independent fixture project.
 - Search, combined filters, per-column view sorting, card collapse, and a visible status footer; UX checks use an isolated synthetic project.
 - Configured completion dates and per-source non-reusable ID sequences, persisted through the existing Markdown transaction.
+- A secondary read-only dependency graph with whole-project SVG layout, task inspection, cycle/unresolved warnings, zoom controls and an accessible relationship list. Graph filtering/focus, board linking and graph-launched editing remain a later interaction stage.
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->

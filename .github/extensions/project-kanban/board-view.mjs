@@ -8,6 +8,7 @@ function sourceForTask(task, config) {
 
 export function matchesTaskView(task, config, criteria) {
   const source = sourceForTask(task, config);
+  if (criteria.status && task.status !== criteria.status) return false;
   if (criteria.source && source?.key !== criteria.source) return false;
   if (criteria.priority && task.priority !== criteria.priority) return false;
   if (criteria.category && task.category !== criteria.category) return false;
@@ -107,6 +108,7 @@ export function hasActiveTaskFilters(criteria) {
   return Boolean(
     normalizedText(criteria.search) ||
       criteria.source ||
+    criteria.status ||
       criteria.priority ||
       criteria.category ||
       criteria.area ||

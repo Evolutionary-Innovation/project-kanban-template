@@ -224,6 +224,16 @@ h1 span {
   opacity: 0.5;
 }
 
+.graph-scope-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0;
+}
+
+.view-toolbar.graph-active .board-only-action {
+  display: none;
+}
+
 #graph-zoom {
   min-width: 4em;
   color: #536b76;
@@ -297,6 +307,27 @@ h1 span {
   fill: #fff8ed;
   stroke: #9c5e28;
   stroke-dasharray: 6 4;
+}
+
+.graph-node.is-context {
+  opacity: 0.62;
+}
+
+.graph-node.is-revealed rect {
+  stroke-dasharray: 5 3;
+  stroke: #9c6a19;
+  stroke-width: 3px;
+}
+
+.board-card-item.is-filter-revealed .board-card {
+  outline: 2px dashed #9c6a19;
+  outline-offset: 2px;
+}
+
+.filter-reveal-note {
+  margin: 8px 0;
+  color: #80621f;
+  font-size: 0.72rem;
 }
 
 .graph-node.has-cycle rect {
@@ -449,7 +480,7 @@ h1 span {
 
 .view-toolbar {
   display: grid;
-  grid-template-columns: minmax(230px, 2fr) repeat(5, minmax(120px, 1fr)) auto;
+  grid-template-columns: minmax(230px, 2fr) repeat(6, minmax(120px, 1fr)) auto;
   align-items: end;
   gap: 10px;
   margin: 0 0 16px;

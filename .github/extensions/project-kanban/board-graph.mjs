@@ -1,4 +1,4 @@
-import { getCardPresentation } from "./board-view.mjs";
+import { filterTasks, getCardPresentation } from "./board-view.mjs";
 
 export const GRAPH_NODE_WIDTH = 236;
 export const GRAPH_NODE_HEIGHT = 116;
@@ -67,6 +67,84 @@ export function createGraphView(snapshot) {
     taskCount: tasks.size,
     unresolvedCount: graph.unresolvedIds.length,
     cycleCount: graph.cyclicTaskIds.length,
+  };
+}
+
+function dependencyNeighbourhood(rootId, edges, direction, includeAll) {
+  const adjacency = new Map();
+  for (const { source, target } of edges) {
+    const from = direction === "upstream" ? target : source;
+    const to = direction === "upstream" ? source : target;
+    const neighbors = adjacency.get(from) ?? [];
+    neighbors.push(to);
+    adjacency.set(from, neighbors);
+  }
+  const visited = new Set([rootId]);
+  let frontier = [rootId];
+  for (let depth = 0; frontier.length > 0 && (includeAll || depth === 0); depth += 1) {
+    const next = [];
+    for (const id of frontier) {
+      for (const neighbor of adjacency.get(id) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
+  return visited;
+}
+
+export function projectGraphView(view, snapshot, criteria = {}, scope = {}) {
+  if (!Array.isArray(view?.nodes) || !Array.isArray(view.edges)) {
+    throw new TypeError("A projected dependency graph is required.");
+  }
+  const matchingIds = new Set(filterTasks(snapshot.tasks, snapshot.config, criteria).map(({ id }) => id));
+  const focusId = scope.focusId && view.nodes.some(({ id }) => id === scope.focusId)
+    ? scope.focusId
+    : null;
+  const selectedIds = focusId
+    ? new Set([
+        ...dependencyNeighbourhood(focusId, view.edges, "upstream", scope.expandUpstream),
+        ...dependencyNeighbourhood(focusId, view.edges, "downstream", scope.expandDownstream),
+      ])
+    : new Set(view.nodes.map(({ id }) => id));
+  const visibleMatches = new Set([...matchingIds].filter((id) => selectedIds.has(id)));
+  const revealId = scope.revealedTaskId && view.nodes.some(({ id, unresolved }) =>
+    id === scope.revealedTaskId && !unresolved && selectedIds.has(id))
+    ? scope.revealedTaskId
+    : null;
+  const primaryIds = new Set(visibleMatches);
+  if (revealId) primaryIds.add(revealId);
+  const visibleIds = new Set(focusId ? selectedIds : primaryIds);
+  if (!focusId) {
+    for (const { source, target } of view.edges) {
+      if (primaryIds.has(target)) visibleIds.add(source);
+    }
+  }
+  const nodes = view.nodes
+    .filter(({ id }) => visibleIds.has(id))
+    .map((node) => ({
+      ...node,
+      matchKind: visibleMatches.has(node.id) ? "match" : node.id === revealId ? "revealed" : "context",
+    }));
+  const nodeIds = new Set(nodes.map(({ id }) => id));
+  const edges = view.edges.filter(({ source, target }) =>
+    nodeIds.has(source) && nodeIds.has(target) &&
+    (focusId || primaryIds.has(target)));
+  const contextCount = nodes.filter(({ matchKind, unresolved }) =>
+    matchKind === "context" && !unresolved).length;
+  return {
+    ...view,
+    nodes,
+    edges,
+    taskCount: view.taskCount,
+    matchingCount: matchingIds.size,
+    focusMatchingCount: focusId ? visibleMatches.size : null,
+    contextCount,
+    unresolvedCount: nodes.filter(({ unresolved }) => unresolved).length,
+    revealedCount: nodes.filter(({ matchKind }) => matchKind === "revealed").length,
+    scope: { focusId, expandUpstream: Boolean(scope.expandUpstream), expandDownstream: Boolean(scope.expandDownstream) },
   };
 }
 

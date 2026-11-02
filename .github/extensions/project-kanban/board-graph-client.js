@@ -1,4 +1,4 @@
-import { createGraphView, graphLayoutKey, graphTitleLines } from "./board-graph.mjs";
+import { createGraphView, graphLayoutKey, graphTitleLines, projectGraphView } from "./board-graph.mjs";
 
 const svgNamespace = "http://www.w3.org/2000/svg";
 
@@ -9,13 +9,14 @@ function svgElement(name, attributes = {}, text = "") {
   return element;
 }
 
-export function createGraphController(root) {
+export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) {
   const viewport = root.querySelector("#graph-viewport");
   const diagram = root.querySelector("#graph-diagram");
   const inspector = root.querySelector("#graph-inspector");
   const taskList = root.querySelector("#graph-task-list");
   const warnings = root.querySelector("#graph-warnings");
   const message = root.querySelector("#graph-message");
+  const wholeProjectButton = root.querySelector("#graph-whole-project");
   const errorPanel = root.querySelector("#graph-error");
   const errorMessage = root.querySelector("#graph-error-message");
   const zoomLabel = root.querySelector("#graph-zoom");
@@ -30,6 +31,14 @@ export function createGraphController(root) {
   let layoutWorker = null;
   let rejectLayout = null;
   const nodeElements = new Map();
+  let latestSnapshot = null;
+  let latestCriteria = {};
+  const scope = {
+    focusId: null,
+    expandUpstream: false,
+    expandDownstream: false,
+    revealedTaskId: null,
+  };
 
   function stopLayout() {
     layoutWorker?.terminate();
@@ -71,6 +80,8 @@ export function createGraphController(root) {
   function nodeLabel(node) {
     return [
       node.title, node.status, node.priority, node.category, node.area,
+      ...(node.matchKind === "context" ? ["Dependency context outside active filters"] : []),
+      ...(node.matchKind === "revealed" ? ["Temporarily revealed outside active filters"] : []),
       ...(node.blockedBy.length ? [`Blocked by ${node.blockedBy.join(", ")}`] : []),
       ...(node.hasCycle ? ["Dependency cycle"] : []),
     ].filter(Boolean).join(". ");
@@ -106,6 +117,16 @@ export function createGraphController(root) {
     return section;
   }
 
+  function actionButton(label, action, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-button";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    button.dataset.graphAction = action;
+    return button;
+  }
+
   function renderInspector() {
     inspector.replaceChildren();
     const heading = document.createElement("h3");
@@ -117,6 +138,38 @@ export function createGraphController(root) {
       hint.textContent = "Select a node or a task in the relationship list to inspect it. Editing remains on the Kanban board.";
       inspector.append(hint);
       return;
+    }
+    const sourceTask = latestSnapshot?.tasks.find(({ id }) => id === node.id);
+    if (!node.unresolved && sourceTask) {
+      const actions = document.createElement("div");
+      actions.className = "graph-inspector-actions";
+      actions.append(
+        actionButton("Edit task", "edit", () => onEditTask?.(sourceTask)),
+        actionButton("Show on board", "board", () => onShowOnBoard?.(node.id)),
+      );
+      if (scope.focusId) {
+        actions.append(
+          actionButton(scope.expandUpstream ? "Upstream expanded" : "Expand upstream path", "expand-upstream", () => {
+            scope.expandUpstream = true;
+            void render(latestSnapshot, latestCriteria);
+          }),
+          actionButton(scope.expandDownstream ? "Downstream expanded" : "Expand downstream impact", "expand-downstream", () => {
+            scope.expandDownstream = true;
+            void render(latestSnapshot, latestCriteria);
+          }),
+        );
+        actions.querySelector('[data-graph-action="expand-upstream"]').disabled = scope.expandUpstream;
+        actions.querySelector('[data-graph-action="expand-downstream"]').disabled = scope.expandDownstream;
+      } else {
+        actions.append(actionButton("Focus neighbourhood", "focus-neighbourhood", () => {
+          scope.focusId = node.id;
+          scope.expandUpstream = false;
+          scope.expandDownstream = false;
+          scope.revealedTaskId = null;
+          void render(latestSnapshot, latestCriteria);
+        }));
+      }
+      inspector.append(actions);
     }
     const metadata = document.createElement("dl");
     for (const [label, value] of [
@@ -228,7 +281,9 @@ export function createGraphController(root) {
       const node = byId.get(position.id);
       const group = svgElement("g", {
         transform: `translate(${position.x - position.width / 2} ${position.y - position.height / 2})`,
-        class: `graph-node${node.unresolved ? " is-unresolved" : ""}${node.hasCycle ? " has-cycle" : ""}`,
+        class: `graph-node${node.unresolved ? " is-unresolved" : ""}${node.hasCycle ? " has-cycle" : ""}` +
+          `${node.matchKind === "context" ? " is-context" : ""}` +
+          `${node.matchKind === "revealed" ? " is-revealed" : ""}`,
         "data-task-id": node.id,
         "data-priority-tone": node.priorityTone,
         role: "button", tabindex: node.id === focusedId ? 0 : -1,
@@ -294,6 +349,8 @@ export function createGraphController(root) {
       const prerequisites = model.edges.filter(({ target }) => target === node.id).map(({ source }) => source);
       const dependents = model.edges.filter(({ source }) => source === node.id).map(({ target }) => target);
       description.textContent = [
+        ...(node.matchKind === "context" ? ["Dependency context, outside the active filters"] : []),
+        ...(node.matchKind === "revealed" ? ["Temporarily revealed outside the active filters"] : []),
         node.status,
         `Depends On: ${prerequisites.join(", ") || "none"}`,
         `Blocked By: ${node.blockedBy.join(", ") || "none"}`,
@@ -326,7 +383,7 @@ export function createGraphController(root) {
       : "Dependency graph unavailable.";
   }
 
-  async function render(snapshot) {
+  async function render(snapshot, criteria = latestCriteria) {
     const request = ++generation;
     stopLayout();
     const restoreId = document.activeElement?.closest(".graph-node")?.dataset.taskId;
@@ -334,7 +391,25 @@ export function createGraphController(root) {
     message.textContent = "Laying out the dependency graph...";
     let nextModel = null;
     try {
-      nextModel = createGraphView(snapshot);
+      latestSnapshot = snapshot;
+      latestCriteria = { ...criteria };
+      if (scope.focusId && !snapshot.tasks.some(({ id }) => id === scope.focusId)) {
+        scope.focusId = null;
+        scope.expandUpstream = false;
+        scope.expandDownstream = false;
+      }
+      if (scope.revealedTaskId && !latestCriteria.search && !latestCriteria.source &&
+        !latestCriteria.status && !latestCriteria.priority && !latestCriteria.category &&
+        !latestCriteria.area && !latestCriteria.dependency) {
+        scope.revealedTaskId = null;
+      }
+      nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope);
+      if (selectedId && snapshot.tasks.some(({ id }) => id === selectedId) &&
+        !nextModel.nodes.some(({ id }) => id === selectedId) &&
+        !nextModel.scope.focusId) {
+        scope.revealedTaskId = selectedId;
+        nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope);
+      }
       const key = graphLayoutKey(nextModel);
       const needsLayout = key !== layoutKey || !positions;
       const nextPositions = needsLayout ? await calculateLayout(nextModel) : positions;
@@ -342,6 +417,7 @@ export function createGraphController(root) {
       positions = nextPositions;
       layoutKey = key;
       model = nextModel;
+      wholeProjectButton.disabled = !model.scope.focusId;
       const removed = selectedId && !model.nodes.some(({ id }) => id === selectedId);
       if (removed) selectedId = null;
       if (!model.nodes.some(({ id }) => id === focusedId)) focusedId = model.nodes[0]?.id ?? null;
@@ -353,9 +429,13 @@ export function createGraphController(root) {
       renderInspector();
       if (needsLayout) fit();
       else setZoom(zoom);
+      const focusDescription = model.scope.focusId
+        ? `Focused on ${model.scope.focusId}: ${model.focusMatchingCount} matches in this focus of ${model.matchingCount} matching tasks project-wide.`
+        : `${model.matchingCount} matching tasks.`;
       message.textContent = model.nodes.length
-        ? `${model.taskCount} tasks, ${model.edges.length} dependencies, ${model.unresolvedCount} unresolved references, ${model.cycleCount} tasks in cycles.${removed ? " The selected task is no longer available." : ""}`
-        : "No tasks in this project.";
+        ? `${focusDescription} ${model.contextCount} dependency context tasks, ${model.revealedCount} temporarily revealed tasks, ${model.unresolvedCount} unresolved placeholders and ${model.cycleCount} cycle tasks.`
+        : model.taskCount === 0 ? "No tasks in this project."
+          : "No tasks match the current filters in this graph scope.";
       if (restoreId && nodeElements.has(restoreId)) nodeElements.get(restoreId).focus({ preventScroll: true });
       else if (restoreId || restoreRetryFocus) {
         root.querySelector(model.nodes.length ? '[data-graph-zoom="fit"]' : "#graph-heading").focus();
@@ -378,5 +458,26 @@ export function createGraphController(root) {
     render,
     fail,
     suspend: () => { generation += 1; stopLayout(); },
+    async resetScope() {
+      scope.focusId = null;
+      scope.expandUpstream = false;
+      scope.expandDownstream = false;
+      scope.revealedTaskId = null;
+      await render(latestSnapshot, latestCriteria);
+    },
+    selectTask: (id, focus = false) => selectNode(id, focus),
+    async showTask(id) {
+      if (!latestSnapshot?.tasks.some((task) => task.id === id)) {
+        message.textContent = `Task ${id} is not available in the current snapshot. Refresh the board and retry.`;
+        return;
+      }
+      scope.focusId = null;
+      scope.expandUpstream = false;
+      scope.expandDownstream = false;
+      scope.revealedTaskId = id;
+      await render(latestSnapshot, latestCriteria);
+      selectNode(id, true);
+    },
+    clearReveal: () => { scope.revealedTaskId = null; },
   };
 }

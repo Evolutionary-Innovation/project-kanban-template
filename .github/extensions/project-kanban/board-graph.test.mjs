@@ -5,8 +5,15 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { readBoardConfig } from "./board-config.mjs";
 import { analyzeDependencies } from "./board-dependencies.mjs";
-import { createGraphView, graphLayoutKey, graphTitleLines, layoutGraph } from "./board-graph.mjs";
+import {
+  createGraphView,
+  graphLayoutKey,
+  graphTitleLines,
+  layoutGraph,
+  projectGraphView,
+} from "./board-graph.mjs";
 import { readBoardSnapshot } from "./board-storage.mjs";
+import { filterTasks } from "./board-view.mjs";
 import * as dagre from "./vendor/dagre-3.1.3.mjs";
 
 const fixtureRoot = fileURLToPath(new URL("../../../examples/synthetic-browser-project/", import.meta.url));
@@ -61,6 +68,61 @@ test("projects all synthetic tasks, unresolved placeholders and cycle warnings w
   assertLayout(model, result);
   assert.deepEqual(result, layoutGraph(model, dagre));
   assert.equal(JSON.stringify(snapshot), before);
+});
+
+test("projects shared filters, dependency context, focus paths and temporary reveals", async () => {
+  const snapshot = await fixture();
+  const base = createGraphView(snapshot);
+  const crossSourceEdge = base.edges.find(({ source, target }) =>
+    snapshot.tasks.find(({ id }) => id === source).source.document !==
+    snapshot.tasks.find(({ id }) => id === target).source.document);
+  assert.ok(crossSourceEdge, "synthetic fixture includes a cross-source dependency");
+  const target = snapshot.tasks.find(({ id }) => id === crossSourceEdge.target);
+  const prerequisite = snapshot.tasks.find(({ id }) => id === crossSourceEdge.source);
+  const targetSource = snapshot.config.sources.find(({ path }) => path === target.source.document);
+  const criteria = { source: targetSource.key, search: target.id };
+  const filtered = projectGraphView(base, snapshot, criteria);
+  assert.equal(filtered.nodes.find(({ id }) => id === target.id).matchKind, "match");
+  assert.equal(filtered.nodes.find(({ id }) => id === prerequisite.id).matchKind, "context");
+  assert.ok(filtered.edges.some(({ source, target: dependent }) =>
+    source === prerequisite.id && dependent === target.id));
+  const expectedMatches = new Set(filterTasks(snapshot.tasks, snapshot.config, criteria).map(({ id }) => id));
+  assert.equal(filtered.matchingCount, expectedMatches.size);
+  const expectedVisible = new Set(expectedMatches);
+  for (const { source, target: dependent } of base.edges) {
+    if (expectedMatches.has(dependent)) expectedVisible.add(source);
+  }
+  assert.deepEqual(new Set(filtered.nodes.map(({ id }) => id)), expectedVisible);
+
+  const focused = projectGraphView(base, snapshot, criteria, { focusId: target.id });
+  assert.ok(focused.nodes.some(({ id }) => id === prerequisite.id));
+  assert.equal(focused.matchingCount, expectedMatches.size);
+  assert.equal(focused.focusMatchingCount,
+    focused.nodes.filter(({ matchKind }) => matchKind === "match").length);
+  assert.ok(focused.edges.some(({ source, target: dependent }) =>
+    source === prerequisite.id && dependent === target.id));
+  const expanded = projectGraphView(base, snapshot, criteria, {
+    focusId: target.id,
+    expandUpstream: true,
+    expandDownstream: true,
+  });
+  assert.ok(expanded.nodes.length >= focused.nodes.length);
+  assert.equal(expanded.nodes.filter(({ id }) => id === target.id).length, 1);
+  assert.ok(expanded.nodes.some(({ matchKind }) => matchKind === "context"));
+
+  const revealed = projectGraphView(base, snapshot, { category: "__no-category__" }, {
+    revealedTaskId: target.id,
+  });
+  assert.equal(revealed.nodes.find(({ id }) => id === target.id).matchKind, "revealed");
+  assert.equal(revealed.revealedCount, 1);
+
+  const unresolvedTask = snapshot.tasks.find(({ dependencyView }) => dependencyView?.hasUnresolved);
+  const unresolvedSource = snapshot.config.sources.find(({ path }) => path === unresolvedTask.source.document);
+  const unresolvedView = projectGraphView(base, snapshot, {
+    source: unresolvedSource.key,
+    search: unresolvedTask.id,
+  });
+  assert.ok(unresolvedView.nodes.some(({ unresolved, matchKind }) => unresolved && matchKind === "context"));
 });
 
 test("lays out chains, diamonds, disconnected components and cycles while retaining original directions", async () => {

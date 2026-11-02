@@ -39,10 +39,11 @@ test("searches case-insensitively across titles, details, and configured source 
   assert.deepEqual(filterTasks(board.tasks, board.config, { search: "no-such-record" }), []);
 });
 
-test("combines source, priority, category, area, and search filters with AND", async () => {
+test("combines status, source, priority, category, area, and search filters with AND", async () => {
   const board = await loadFixture();
   const sample = board.tasks.find(({ id }) => id.startsWith("TD-"));
   const criteria = {
+    status: sample.status,
     source: "technicalDebt",
     priority: sample.priority,
     category: sample.category,
@@ -52,6 +53,8 @@ test("combines source, priority, category, area, and search filters with AND", a
 
   assert.deepEqual(filterTasks(board.tasks, board.config, criteria).map(({ id }) => id), [sample.id]);
   assert.equal(hasActiveTaskFilters(criteria), true);
+  assert.deepEqual(filterTasks(board.tasks, board.config, { status: sample.status })
+    .map(({ status }) => status), Array(filterTasks(board.tasks, board.config, { status: sample.status }).length).fill(sample.status));
   assert.equal(isManualOrderView(criteria), false);
   assert.equal(isManualOrderView({}, "priority"), false);
   assert.equal(isManualOrderView({}, "manual"), true);

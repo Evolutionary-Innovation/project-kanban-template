@@ -5,6 +5,7 @@ import {
   getCardPresentation,
   hasActiveTaskFilters,
   isManualOrderView,
+  matchesTaskView,
   sortTasks,
 } from "./board-view.mjs";
 
@@ -21,6 +22,7 @@ const taskFormError = document.querySelector("#task-form-error");
 const saveTaskButton = document.querySelector("#save-task");
 const taskSearchInput = document.querySelector("#task-search");
 const sourceFilter = document.querySelector("#source-filter");
+const statusFilter = document.querySelector("#status-filter");
 const priorityFilter = document.querySelector("#priority-filter");
 const categoryFilter = document.querySelector("#category-filter");
 const areaFilter = document.querySelector("#area-filter");
@@ -37,6 +39,7 @@ let activeView = "kanban";
 let graphController = null;
 let graphModuleAttempt = 0;
 let graphViewGeneration = 0;
+let pendingGraphTaskId = null;
 let boardLoadError = "";
 let boardSnapshot = null;
 let draggedTaskId = null;
@@ -47,6 +50,7 @@ const sortByStatus = new Map();
 const viewState = {
   search: "",
   source: "",
+  status: "",
   priority: "",
   category: "",
   area: "",
@@ -88,12 +92,18 @@ function updateBoardSummary() {
     return;
   }
   if (activeView === "graph") {
-    boardStatistics.textContent = `${boardSnapshot.tasks.length} tasks in the whole-project dependency view`;
+    const matchingCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
+    boardStatistics.textContent = `${matchingCount} of ${boardSnapshot.tasks.length} tasks match the shared filters`;
     orderingHint.hidden = true;
     return;
   }
   const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
-  boardStatistics.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks shown`;
+  const revealedTask = viewState.revealedTaskId &&
+    boardSnapshot.tasks.find(({ id }) => id === viewState.revealedTaskId);
+  const revealNote = revealedTask && !matchesTaskView(revealedTask, boardSnapshot.config, viewState)
+    ? `; 1 temporarily shown outside filters (${revealedTask.id})`
+    : "";
+  boardStatistics.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks match${revealNote}`;
   orderingHint.hidden = !hasActiveFilters() && !boardSnapshot.config.statuses.some(
     (status) => (sortByStatus.get(status) ?? "manual") !== "manual",
   );
@@ -120,6 +130,7 @@ function setSelectOptions(select, placeholder, values, selectedValue) {
 
 function refreshFilterOptions() {
   const sources = boardSnapshot.config.sources.map(({ key, label }) => ({ value: key, label }));
+  const statuses = boardSnapshot.config.statuses.map((value) => ({ value, label: value }));
   const priorities = boardSnapshot.config.priorities.map(({ name }) => ({ value: name, label: name }));
   const categories = [...new Set(boardSnapshot.tasks.map(({ category }) => category))]
     .sort((left, right) => left.localeCompare(right))
@@ -129,6 +140,7 @@ function refreshFilterOptions() {
     .map((value) => ({ value, label: value }));
 
   viewState.source = setSelectOptions(sourceFilter, "All sources", sources, viewState.source);
+  viewState.status = setSelectOptions(statusFilter, "All statuses", statuses, viewState.status);
   viewState.priority = setSelectOptions(priorityFilter, "All priorities", priorities, viewState.priority);
   viewState.category = setSelectOptions(categoryFilter, "All categories", categories, viewState.category);
   viewState.area = setSelectOptions(areaFilter, "All areas", areas, viewState.area);
@@ -184,7 +196,7 @@ function createCardAction(label, className, handler, action = "") {
   return button;
 }
 
-function renderCard(task, index, cardCount) {
+function renderCard(task, index, cardCount, temporarilyRevealed = false) {
   const presentation = getCardPresentation(
     task,
     boardSnapshot.config,
@@ -195,6 +207,7 @@ function renderCard(task, index, cardCount) {
   item.draggable = canReorderColumn(task.status);
   item.dataset.taskId = task.id;
   item.dataset.status = task.status;
+  if (temporarilyRevealed) item.classList.add("is-filter-revealed");
   item.setAttribute("aria-label", `${presentation.title}, ${task.category}`);
 
   const article = document.createElement("article");
@@ -216,6 +229,12 @@ function renderCard(task, index, cardCount) {
   appendTag(classification, task.category, `category-tone-${sourceConfig?.categoryTone ?? "slate"}`);
   appendTag(classification, task.area, "area-tag");
   article.append(classification);
+  if (temporarilyRevealed) {
+    const note = document.createElement("p");
+    note.className = "filter-reveal-note";
+    note.textContent = "Temporarily shown outside the active filters.";
+    article.append(note);
+  }
 
   if (presentation.detailSections.length > 0) {
     const details = document.createElement("div");
@@ -284,6 +303,7 @@ function renderCard(task, index, cardCount) {
     createMoveButton(task, "down", index, cardCount),
     createStatusSelect(task),
     createCardAction("Edit", "", () => openEditDialog(task)),
+    createCardAction("Show in graph", "", () => void showTaskInGraph(task.id), "graph"),
     createCardAction("Delete", "delete-button", () => void deleteTask(task)),
   );
   const collapseButton = controls.querySelector('[data-card-action="collapse"]');
@@ -337,6 +357,7 @@ function renderBoard(payload) {
   }
 
   refreshFilterOptions();
+  if (!payload.tasks.some(({ id }) => id === viewState.revealedTaskId)) viewState.revealedTaskId = null;
   renderColumns(payload.columns);
   sourcesElement.textContent = payload.sources.join(" · ");
   revisionInfo.textContent = Object.entries(payload.revisions)
@@ -356,7 +377,10 @@ async function renderGraph() {
     if (!graphController) {
       const module = await import(`./board-graph-client.js?attempt=${++graphModuleAttempt}`);
       if (request !== graphViewGeneration || activeView !== "graph") return;
-      graphController = module.createGraphController(graphPanel);
+        graphController = module.createGraphController(graphPanel, {
+          onEditTask: openEditDialog,
+          onShowOnBoard: showTaskOnBoard,
+        });
     }
     if (boardLoadError) {
       graphController.fail(boardLoadError);
@@ -366,7 +390,12 @@ async function renderGraph() {
       graphPanel.querySelector("#graph-message").textContent = "Load the Markdown board before viewing dependencies.";
       return;
     }
-    await graphController.render(boardSnapshot);
+    const pendingTaskId = pendingGraphTaskId;
+    pendingGraphTaskId = null;
+    await graphController.render(boardSnapshot, viewState);
+    if (pendingTaskId && request === graphViewGeneration && activeView === "graph") {
+      await graphController.showTask(pendingTaskId);
+    }
   } catch (error) {
     if (request !== graphViewGeneration || activeView !== "graph") return;
     graphPanel.querySelector("#graph-error-message").textContent =
@@ -381,7 +410,8 @@ function setProjectView(view) {
   activeView = view;
   const graphVisible = view === "graph";
   boardElement.hidden = graphVisible;
-  viewToolbar.hidden = graphVisible;
+  viewToolbar.hidden = false;
+  viewToolbar.classList.toggle("graph-active", graphVisible);
   graphPanel.hidden = !graphVisible;
   kanbanButton.setAttribute("aria-pressed", String(!graphVisible));
   graphButton.setAttribute("aria-pressed", String(graphVisible));
@@ -400,11 +430,21 @@ function renderColumns(columns) {
       throw new Error("The board response contains an invalid column.");
     }
 
-    const visibleCards = sortColumnCards(filterTasks(column.cards, boardSnapshot.config, viewState), column.status);
+    const matchingCards = filterTasks(column.cards, boardSnapshot.config, viewState);
+    const revealedTask = viewState.revealedTaskId
+      ? column.cards.find(({ id }) => id === viewState.revealedTaskId)
+      : null;
+    const hasTemporaryReveal = Boolean(revealedTask && !matchingCards.some(({ id }) => id === revealedTask.id));
+    const visibleCards = sortColumnCards(
+      hasTemporaryReveal ? [...matchingCards, revealedTask] : matchingCards,
+      column.status,
+    );
     const section = document.createElement("section");
     section.className = "board-column";
     section.dataset.status = column.status;
-    section.setAttribute("aria-label", `${column.status}, ${visibleCards.length} of ${column.cards.length} cards shown`);
+    section.setAttribute("aria-label",
+      `${column.status}, ${matchingCards.length} matching cards` +
+      `${hasTemporaryReveal ? ", 1 task temporarily shown outside filters" : ""}`);
 
     const heading = document.createElement("div");
     heading.className = "column-heading";
@@ -416,8 +456,12 @@ function renderColumns(columns) {
     title.textContent = column.status;
     const count = document.createElement("span");
     count.className = "column-count";
-    count.textContent = hasActiveFilters() ? `${visibleCards.length}/${column.cards.length}` : String(column.cards.length);
-    count.setAttribute("aria-label", `${visibleCards.length} of ${column.cards.length} cards shown`);
+    count.textContent = hasActiveFilters()
+      ? `${matchingCards.length}/${column.cards.length}${hasTemporaryReveal ? " +1 shown" : ""}`
+      : String(column.cards.length);
+    count.setAttribute("aria-label",
+      `${matchingCards.length} of ${column.cards.length} cards match` +
+      `${hasTemporaryReveal ? "; 1 temporarily shown outside filters" : ""}`);
     headingLine.append(title, count);
     headingCopy.append(headingLine);
 
@@ -486,7 +530,8 @@ function renderColumns(columns) {
         ) {
           throw new Error("The board response contains an invalid task.");
         }
-        list.append(renderCard(task, index, visibleCards.length));
+        list.append(renderCard(task, index, visibleCards.length,
+          hasTemporaryReveal && task.id === revealedTask.id));
       });
     }
     section.append(list);
@@ -501,7 +546,41 @@ function announceViewChange() {
   renderColumns(boardSnapshot.columns);
   updateBoardSummary();
   const visibleCount = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState).length;
-  statusElement.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks match the current view.`;
+  const reveal = viewState.revealedTaskId &&
+    boardSnapshot.tasks.some(({ id }) => id === viewState.revealedTaskId) &&
+    !matchesTaskView(boardSnapshot.tasks.find(({ id }) => id === viewState.revealedTaskId), boardSnapshot.config, viewState)
+    ? ` One task (${viewState.revealedTaskId}) is temporarily shown outside filters.`
+    : "";
+  statusElement.textContent = `${visibleCount} of ${boardSnapshot.tasks.length} tasks match the current filters.${reveal}`;
+  if (activeView === "graph") void renderGraph();
+}
+
+function showTaskOnBoard(taskId) {
+  const task = boardSnapshot?.tasks.find(({ id }) => id === taskId);
+  if (!task) {
+    statusElement.textContent = `Task ${taskId} is no longer available on the board. Refresh and retry.`;
+    return;
+  }
+  viewState.revealedTaskId = matchesTaskView(task, boardSnapshot.config, viewState) ? null : taskId;
+  setProjectView("kanban");
+  announceViewChange();
+  requestAnimationFrame(() => {
+    const item = [...boardElement.querySelectorAll("[data-task-id]")]
+      .find((candidate) => candidate.dataset.taskId === taskId);
+    item?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    item?.querySelector("h3")?.setAttribute("tabindex", "-1");
+    item?.querySelector("h3")?.focus({ preventScroll: true });
+  });
+}
+
+function showTaskInGraph(taskId) {
+  if (!boardSnapshot?.tasks.some(({ id }) => id === taskId)) {
+    statusElement.textContent = `Task ${taskId} is no longer available on the board. Refresh and retry.`;
+    return;
+  }
+  pendingGraphTaskId = taskId;
+  if (activeView !== "graph") setProjectView("graph");
+  else void renderGraph();
 }
 
 function calculateOrder(taskId, status, requestedIndex) {
@@ -873,6 +952,7 @@ taskSearchInput.addEventListener("input", () => {
 });
 for (const [select, key] of [
   [sourceFilter, "source"],
+  [statusFilter, "status"],
   [priorityFilter, "priority"],
   [categoryFilter, "category"],
   [areaFilter, "area"],
@@ -886,8 +966,12 @@ for (const [select, key] of [
 document.querySelector("#clear-filters").addEventListener("click", () => {
   viewState.search = "";
   taskSearchInput.value = "";
-  for (const key of ["source", "priority", "category", "area", "dependency"]) viewState[key] = "";
-  for (const select of [sourceFilter, priorityFilter, categoryFilter, areaFilter, dependencyFilter]) select.value = "";
+  viewState.revealedTaskId = null;
+  for (const key of ["source", "status", "priority", "category", "area", "dependency"]) viewState[key] = "";
+  for (const select of [sourceFilter, statusFilter, priorityFilter, categoryFilter, areaFilter, dependencyFilter]) {
+    select.value = "";
+  }
+  graphController?.clearReveal();
   announceViewChange();
 });
 document.querySelector("#collapse-all").addEventListener("click", () => setAllCardsCollapsed(true));
@@ -911,4 +995,7 @@ document.querySelector("#graph-return").addEventListener("click", () => {
   kanbanButton.focus();
 });
 document.querySelector("#graph-retry").addEventListener("click", () => void renderGraph());
+document.querySelector("#graph-whole-project").addEventListener("click", () => {
+  void graphController?.resetScope();
+});
 void refreshBoard();

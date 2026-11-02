@@ -36,7 +36,7 @@
         </div>
       </div>
 
-      <section class="view-toolbar" aria-label="Board search and filters">
+      <section class="view-toolbar" aria-label="Shared task search and filters">
         <label class="view-field search-field">
           Search tasks
           <input id="task-search" type="search" autocomplete="off" placeholder="Title, details, rationale, recommendations…" />
@@ -44,6 +44,10 @@
         <label class="view-field">
           Source
           <select id="source-filter"><option value="">All sources</option></select>
+        </label>
+        <label class="view-field">
+          Status
+          <select id="status-filter"><option value="">All statuses</option></select>
         </label>
         <label class="view-field">
           Priority
@@ -69,8 +73,8 @@
         </label>
         <div class="view-actions">
           <button id="clear-filters" class="secondary-button" type="button">Clear</button>
-          <button id="collapse-all" class="secondary-button" type="button">Collapse all</button>
-          <button id="expand-all" class="secondary-button" type="button">Expand all</button>
+          <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
+          <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
         </div>
       </section>
       <p id="ordering-hint" class="ordering-hint" hidden>
@@ -81,7 +85,7 @@
 
       <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading" hidden>
         <h2 id="graph-heading" tabindex="-1">Project dependencies</h2>
-        <p>Whole-project view, including isolated tasks. Board search and filters apply only in Kanban; your settings are retained.</p>
+        <p>Whole-project view, including isolated tasks. Shared search and filters apply in both views; direct prerequisites outside the matches are labelled as dependency context.</p>
         <p id="graph-help">Arrows run from prerequisite to dependent: A &#8594; B means B depends on A. Select a node to inspect it. Use arrow keys or Home/End to navigate nodes, Enter to inspect, and Escape to return to the graph controls.</p>
         <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Dashed nodes/arrows: unresolved references. Cycle warnings identify tasks, not every edge in a cycle.</p>
         <div class="graph-controls" role="group" aria-label="Graph viewport">
@@ -90,6 +94,9 @@
           <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom out</button>
           <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset zoom</button>
           <output id="graph-zoom" aria-label="Graph zoom"></output>
+        </div>
+        <div class="graph-scope-controls" role="group" aria-label="Graph scope">
+          <button id="graph-whole-project" class="secondary-button" type="button" disabled>Whole project</button>
         </div>
         <p id="graph-message" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="graph-error" class="graph-error" hidden>

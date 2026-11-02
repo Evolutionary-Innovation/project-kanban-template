@@ -62,6 +62,47 @@ test("combines status, source, priority, category, area, and search filters with
   assert.equal(isManualOrderView({}, "manual"), true);
 });
 
+test("uses OR within multi-select groups and AND across groups", async () => {
+  const board = await loadFixture();
+  const [first, second, third, fourth] = board.tasks;
+  const priorities = board.config.priorities.map(({ name }) => name);
+  const outsidePriority = priorities[2] ?? "__outside_priority__";
+  const candidates = [
+    { ...first, category: "Reliability", priority: priorities[0] },
+    { ...second, category: "Architecture", priority: priorities[1] },
+    { ...third, category: "Reliability", priority: outsidePriority },
+    { ...fourth, category: "Other", priority: priorities[0] },
+  ];
+  const criteria = {
+    status: [first.status, second.status],
+    source: board.config.sources.map(({ key }) => key),
+    priority: priorities.slice(0, 2),
+    category: ["Reliability", "Architecture"],
+    area: [first.area, second.area],
+  };
+  assert.deepEqual(filterTasks(candidates, board.config, criteria).map(({ id }) => id), [
+    first.id,
+    second.id,
+  ]);
+  assert.equal(filterTasks(board.tasks, board.config, {
+    source: [], status: [], priority: [], category: [], area: [], dependency: [],
+  }).length, board.tasks.length);
+  assert.equal(hasActiveTaskFilters({ ...criteria, category: [] }), true);
+  assert.equal(isManualOrderView({ priority: [priorities[0]] }, "manual"), false);
+  assert.equal(hasActiveTaskFilters({
+    search: "", source: [], status: [], priority: [], category: [], area: [], dependency: [],
+  }), false);
+
+  const dependencyCandidates = [
+    { ...first, dependencyView: { isBlocked: true, hasUnresolved: false, hasCycle: false } },
+    { ...second, dependencyView: { isBlocked: false, hasUnresolved: true, hasCycle: false } },
+    { ...third, dependencyView: { isBlocked: false, hasUnresolved: false, hasCycle: true } },
+  ];
+  assert.deepEqual(filterTasks(dependencyCandidates, board.config, {
+    dependency: ["blocked", "unresolved"],
+  }).map(({ id }) => id), [first.id, second.id]);
+});
+
 test("searches dependency references and filters blocked, unresolved, and cyclic tasks", async () => {
   const board = await loadFixture();
   const blocked = board.tasks.find(({ dependencyView }) => dependencyView?.isBlocked);

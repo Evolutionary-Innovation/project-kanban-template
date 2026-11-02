@@ -64,7 +64,7 @@ Details and configured populated fields are rendered independently using their c
 
 ## Board views
 
-Search covers task IDs, titles, details, configured fields, and dependency references. Search results remain in their original status columns. Source, Status, priority, category, area, and dependency-state filters combine with search and apply in both Kanban and Dependencies; each Kanban column can use an independent view-only sort. These controls do not write Markdown or change canonical `Order`. Search, filters, sorts, graph focus/expansion, and collapsed-card state are held in memory for the open canvas session.
+Search covers task IDs, titles, details, configured fields, and dependency references. Search results remain in their original status columns. Source, Status, priority, category, area, and dependency-state checkbox filters allow multiple selected values: selections within one group use OR, while groups combine with AND. Search and filters apply identically in Kanban and Dependencies. Removable chips represent individual filter selections. Each Kanban column can use an independent view-only sort. These controls do not write Markdown or change canonical `Order`. Search, filters, sorts, graph focus/expansion, and collapsed-card state are held in memory for the open canvas session. Saved views and workflow-analytics sort options are future considerations and must not persist to Markdown or change canonical ordering.
 
 Manual drag and keyboard reordering are disabled while search or filters hide tasks, or while that column uses a non-manual sort. Clear the view filters and select Manual order to reorder. A task's Status control remains available to move it to the end of another status column.
 

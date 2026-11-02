@@ -41,42 +41,37 @@
           Search tasks
           <input id="task-search" type="search" autocomplete="off" placeholder="Title, details, rationale, recommendations…" />
         </label>
-        <label class="view-field">
-          Source
-          <select id="source-filter"><option value="">All sources</option></select>
-        </label>
-        <label class="view-field">
-          Status
-          <select id="status-filter"><option value="">All statuses</option></select>
-        </label>
-        <label class="view-field">
-          Priority
-          <select id="priority-filter"><option value="">All priorities</option></select>
-        </label>
-        <label class="view-field">
-          Category
-          <select id="category-filter"><option value="">All categories</option></select>
-        </label>
-        <label class="view-field">
-          Area
-          <select id="area-filter"><option value="">All areas</option></select>
-        </label>
-        <label class="view-field">
-          Dependencies
-          <select id="dependency-filter">
-            <option value="">All dependencies</option>
-            <option value="blocked">Blocked</option>
-            <option value="unblocked">Unblocked</option>
-            <option value="unresolved">Unresolved references</option>
-            <option value="cycle">Dependency cycles</option>
-          </select>
-        </label>
+        <details id="source-filter" class="view-field filter-field" data-filter="source" data-filter-label="Source" data-all-label="All sources">
+          <summary>All sources</summary>
+          <fieldset class="filter-options"><legend>Source</legend></fieldset>
+        </details>
+        <details id="status-filter" class="view-field filter-field" data-filter="status" data-filter-label="Status" data-all-label="All statuses">
+          <summary>All statuses</summary>
+          <fieldset class="filter-options"><legend>Status</legend></fieldset>
+        </details>
+        <details id="priority-filter" class="view-field filter-field" data-filter="priority" data-filter-label="Priority" data-all-label="All priorities">
+          <summary>All priorities</summary>
+          <fieldset class="filter-options"><legend>Priority</legend></fieldset>
+        </details>
+        <details id="category-filter" class="view-field filter-field" data-filter="category" data-filter-label="Category" data-all-label="All categories">
+          <summary>All categories</summary>
+          <fieldset class="filter-options"><legend>Category</legend></fieldset>
+        </details>
+        <details id="area-filter" class="view-field filter-field" data-filter="area" data-filter-label="Area" data-all-label="All areas">
+          <summary>All areas</summary>
+          <fieldset class="filter-options"><legend>Area</legend></fieldset>
+        </details>
+        <details id="dependency-filter" class="view-field filter-field" data-filter="dependency" data-filter-label="Dependency state" data-all-label="All dependency states">
+          <summary>All dependency states</summary>
+          <fieldset class="filter-options"><legend>Dependency state</legend></fieldset>
+        </details>
         <div class="view-actions">
           <button id="clear-filters" class="secondary-button" type="button">Clear</button>
           <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
           <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
         </div>
       </section>
+      <div id="active-filter-chips" class="active-filter-chips" role="group" aria-label="Active filters" hidden></div>
       <p id="ordering-hint" class="ordering-hint" hidden>
         Manual reorder is disabled while search or filters hide cards, or while a column uses a non-manual sort.
       </p>

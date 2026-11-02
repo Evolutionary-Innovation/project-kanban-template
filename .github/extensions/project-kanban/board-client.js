@@ -22,12 +22,9 @@ const taskFormFields = document.querySelector("#task-form-fields");
 const taskFormError = document.querySelector("#task-form-error");
 const saveTaskButton = document.querySelector("#save-task");
 const taskSearchInput = document.querySelector("#task-search");
-const sourceFilter = document.querySelector("#source-filter");
-const statusFilter = document.querySelector("#status-filter");
-const priorityFilter = document.querySelector("#priority-filter");
-const categoryFilter = document.querySelector("#category-filter");
-const areaFilter = document.querySelector("#area-filter");
-const dependencyFilter = document.querySelector("#dependency-filter");
+const filterControls = [...document.querySelectorAll(".filter-field")];
+const filterControlsByKey = new Map(filterControls.map((control) => [control.dataset.filter, control]));
+const activeFilterChips = document.querySelector("#active-filter-chips");
 const boardStatistics = document.querySelector("#board-statistics");
 const lastUpdated = document.querySelector("#last-updated");
 const revisionInfo = document.querySelector("#revision-info");
@@ -50,12 +47,12 @@ const sortByStatus = new Map();
 
 const viewState = {
   search: "",
-  source: "",
-  status: "",
-  priority: "",
-  category: "",
-  area: "",
-  dependency: "",
+  source: [],
+  status: [],
+  priority: [],
+  category: [],
+  area: [],
+  dependency: [],
 };
 
 function appendTag(parent, label, className = "") {
@@ -114,41 +111,96 @@ function updateBoardSummary() {
   );
 }
 
-function setSelectOptions(select, placeholder, values, selectedValue) {
-  const options = values.map(({ value, label }) => ({ value, label }));
-  const validSelection = options.some(({ value }) => value === selectedValue) ? selectedValue : "";
+function selectedFilterOptions(control) {
+  return [...control.querySelectorAll(".filter-options input:checked")].map((input) => ({
+    value: input.value,
+    label: input.nextElementSibling.textContent,
+  }));
+}
+
+function updateFilterSummary(control) {
+  const selected = selectedFilterOptions(control);
+  const filterLabel = control.dataset.filterLabel;
+  const summary = control.querySelector("summary");
+  summary.textContent = selected.length === 0
+    ? control.dataset.allLabel
+    : selected.length === 1
+      ? `${filterLabel}: ${selected[0].label}`
+      : `${filterLabel} (${selected.length} selected)`;
+  summary.title = selected.map(({ label }) => label).join(", ");
+  summary.setAttribute(
+    "aria-label",
+    selected.length ? `${filterLabel} filter. Selected: ${selected.map(({ label }) => label).join(", ")}` :
+      control.dataset.allLabel,
+  );
+}
+
+function renderActiveFilterChips() {
   const fragment = document.createDocumentFragment();
-  const allOption = document.createElement("option");
-  allOption.value = "";
-  allOption.textContent = placeholder;
-  fragment.append(allOption);
-  for (const { value, label } of options) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    fragment.append(option);
+  for (const control of filterControls) {
+    const filterLabel = control.dataset.filterLabel;
+    for (const option of selectedFilterOptions(control)) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "filter-chip";
+      chip.dataset.filterKey = control.dataset.filter;
+      chip.dataset.filterValue = option.value;
+      chip.textContent = `${filterLabel}: ${option.label} ×`;
+      chip.setAttribute("aria-label", `Remove ${filterLabel} filter ${option.label}`);
+      fragment.append(chip);
+    }
   }
-  select.replaceChildren(fragment);
-  select.value = validSelection;
-  return validSelection;
+  activeFilterChips.replaceChildren(fragment);
+  activeFilterChips.hidden = activeFilterChips.childElementCount === 0;
+}
+
+function setFilterOptions(control, options) {
+  const key = control.dataset.filter;
+  const availableValues = new Set(options.map(({ value }) => value));
+  viewState[key] = viewState[key].filter((value) => availableValues.has(value));
+  const fieldset = control.querySelector(".filter-options");
+  const fragment = document.createDocumentFragment();
+  for (const { value, label: optionLabel } of options) {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    const text = document.createElement("span");
+    checkbox.type = "checkbox";
+    checkbox.value = value;
+    checkbox.checked = viewState[key].includes(value);
+    text.textContent = optionLabel;
+    label.append(checkbox, text);
+    fragment.append(label);
+  }
+  fieldset.replaceChildren(fragment);
+  updateFilterSummary(control);
 }
 
 function refreshFilterOptions() {
   const sources = boardSnapshot.config.sources.map(({ key, label }) => ({ value: key, label }));
   const statuses = boardSnapshot.config.statuses.map((value) => ({ value, label: value }));
   const priorities = boardSnapshot.config.priorities.map(({ name }) => ({ value: name, label: name }));
-  const categories = [...new Set(boardSnapshot.tasks.map(({ category }) => category))]
+  const categories = [...new Set(boardSnapshot.tasks.map(({ category }) => category).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right))
     .map((value) => ({ value, label: value }));
-  const areas = [...new Set(boardSnapshot.tasks.map(({ area }) => area))]
+  const areas = [...new Set(boardSnapshot.tasks.map(({ area }) => area).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right))
     .map((value) => ({ value, label: value }));
-
-  viewState.source = setSelectOptions(sourceFilter, "All sources", sources, viewState.source);
-  viewState.status = setSelectOptions(statusFilter, "All statuses", statuses, viewState.status);
-  viewState.priority = setSelectOptions(priorityFilter, "All priorities", priorities, viewState.priority);
-  viewState.category = setSelectOptions(categoryFilter, "All categories", categories, viewState.category);
-  viewState.area = setSelectOptions(areaFilter, "All areas", areas, viewState.area);
+  const dependencyStates = [
+    { value: "blocked", label: "Blocked" },
+    { value: "unblocked", label: "Unblocked" },
+    { value: "unresolved", label: "Unresolved references" },
+    { value: "cycle", label: "Dependency cycles" },
+  ];
+  const optionsByKey = {
+    source: sources,
+    status: statuses,
+    priority: priorities,
+    category: categories,
+    area: areas,
+    dependency: dependencyStates,
+  };
+  for (const control of filterControls) setFilterOptions(control, optionsByKey[control.dataset.filter] ?? []);
+  renderActiveFilterChips();
   taskSearchInput.value = viewState.search;
 }
 
@@ -957,27 +1009,54 @@ taskSearchInput.addEventListener("input", () => {
   viewState.search = taskSearchInput.value.trim();
   announceViewChange();
 });
-for (const [select, key] of [
-  [sourceFilter, "source"],
-  [statusFilter, "status"],
-  [priorityFilter, "priority"],
-  [categoryFilter, "category"],
-  [areaFilter, "area"],
-  [dependencyFilter, "dependency"],
-]) {
-  select.addEventListener("change", () => {
-    viewState[key] = select.value;
+for (const control of filterControls) {
+  control.addEventListener("toggle", () => {
+    if (!control.open) return;
+    for (const otherControl of filterControls) {
+      if (otherControl !== control) otherControl.open = false;
+    }
+  });
+  control.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !control.open) return;
+    event.preventDefault();
+    control.open = false;
+    control.querySelector("summary").focus();
+  });
+  control.querySelector(".filter-options").addEventListener("change", (event) => {
+    if (!event.target.matches('input[type="checkbox"]')) return;
+    const key = control.dataset.filter;
+    viewState[key] = selectedFilterOptions(control).map(({ value }) => value);
+    updateFilterSummary(control);
+    renderActiveFilterChips();
     announceViewChange();
   });
 }
+activeFilterChips.addEventListener("click", (event) => {
+  const chip = event.target.closest(".filter-chip");
+  if (!chip) return;
+  const control = filterControlsByKey.get(chip.dataset.filterKey);
+  if (!control) return;
+  const key = chip.dataset.filterKey;
+  viewState[key] = viewState[key].filter((value) => value !== chip.dataset.filterValue);
+  for (const input of control.querySelectorAll(".filter-options input")) {
+    input.checked = viewState[key].includes(input.value);
+  }
+  updateFilterSummary(control);
+  renderActiveFilterChips();
+  announceViewChange();
+  control.querySelector("summary").focus();
+});
 document.querySelector("#clear-filters").addEventListener("click", () => {
   viewState.search = "";
   taskSearchInput.value = "";
   viewState.revealedTaskId = null;
-  for (const key of ["source", "status", "priority", "category", "area", "dependency"]) viewState[key] = "";
-  for (const select of [sourceFilter, statusFilter, priorityFilter, categoryFilter, areaFilter, dependencyFilter]) {
-    select.value = "";
+  for (const control of filterControls) {
+    const key = control.dataset.filter;
+    viewState[key] = [];
+    for (const input of control.querySelectorAll(".filter-options input")) input.checked = false;
+    updateFilterSummary(control);
   }
+  renderActiveFilterChips();
   graphController?.clearReveal();
   announceViewChange();
 });

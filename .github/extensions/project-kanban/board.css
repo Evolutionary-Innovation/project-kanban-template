@@ -136,7 +136,9 @@ button {
 .dialog-close:focus-visible,
 .view-field input:focus-visible,
 .view-field select:focus-visible,
+.filter-field summary:focus-visible,
 .column-sort:focus-visible,
+.filter-chip:focus-visible,
 .task-field input:focus-visible,
 .task-field select:focus-visible,
 .task-field textarea:focus-visible {
@@ -538,7 +540,7 @@ h1 span {
 .view-toolbar {
   display: grid;
   grid-template-columns: minmax(230px, 2fr) repeat(6, minmax(120px, 1fr)) auto;
-  align-items: end;
+  align-items: start;
   gap: 10px;
   margin: 0 0 16px;
 }
@@ -565,6 +567,111 @@ h1 span {
   color: #355565;
   font: inherit;
   font-size: 0.73rem;
+}
+
+.filter-field {
+  position: relative;
+  display: block;
+}
+
+.filter-field summary {
+  min-height: 36px;
+  padding: 9px 28px 8px 9px;
+  overflow: hidden;
+  border: 1px solid #d3e1e3;
+  border-radius: 8px;
+  background: #fff;
+  color: #355565;
+  font-size: 0.73rem;
+  font-weight: 650;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.filter-field summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-field summary::after {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  content: "▾";
+  color: #536b76;
+}
+
+.filter-options {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  max-height: 260px;
+  margin: 4px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #d3e1e3;
+  border-radius: 9px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.filter-options legend {
+  padding: 0 4px;
+  color: #536b76;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.filter-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: #355565;
+  font-size: 0.73rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.filter-options label:hover {
+  background: #f0f7f6;
+}
+
+.filter-options input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #347d79;
+}
+
+.active-filter-chips:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -5px 0 14px;
+}
+
+.filter-chip {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid #c9dedd;
+  border-radius: 999px;
+  background: #f1f8f7;
+  color: #315d62;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  border-color: #83b4b1;
+  background: #e7f2f1;
 }
 
 .view-actions {

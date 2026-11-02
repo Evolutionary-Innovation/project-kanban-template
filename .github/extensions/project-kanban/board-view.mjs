@@ -6,18 +6,32 @@ function sourceForTask(task, config) {
   return config.sources.find(({ path }) => path === task.source.document);
 }
 
+function selectedValues(selection) {
+  return Array.isArray(selection) ? selection : selection ? [selection] : [];
+}
+
+function matchesSelection(selection, value) {
+  const selected = selectedValues(selection);
+  return selected.length === 0 || selected.includes(value);
+}
+
 export function matchesTaskView(task, config, criteria) {
   const source = sourceForTask(task, config);
-  if (criteria.status && task.status !== criteria.status) return false;
-  if (criteria.source && source?.key !== criteria.source) return false;
-  if (criteria.priority && task.priority !== criteria.priority) return false;
-  if (criteria.category && task.category !== criteria.category) return false;
-  if (criteria.area && task.area !== criteria.area) return false;
+  if (!matchesSelection(criteria.status, task.status)) return false;
+  if (!matchesSelection(criteria.source, source?.key)) return false;
+  if (!matchesSelection(criteria.priority, task.priority)) return false;
+  if (!matchesSelection(criteria.category, task.category)) return false;
+  if (!matchesSelection(criteria.area, task.area)) return false;
   const dependencies = task.dependencyView;
-  if (criteria.dependency === "blocked" && !dependencies?.isBlocked) return false;
-  if (criteria.dependency === "unblocked" && dependencies?.isBlocked) return false;
-  if (criteria.dependency === "unresolved" && !dependencies?.hasUnresolved) return false;
-  if (criteria.dependency === "cycle" && !dependencies?.hasCycle) return false;
+  const dependencyStates = {
+    blocked: Boolean(dependencies?.isBlocked),
+    unblocked: !dependencies?.isBlocked,
+    unresolved: Boolean(dependencies?.hasUnresolved),
+    cycle: Boolean(dependencies?.hasCycle),
+  };
+  const selectedDependencies = selectedValues(criteria.dependency);
+  if (selectedDependencies.length &&
+      !selectedDependencies.some((state) => dependencyStates[state])) return false;
   if (!criteria.search) return true;
 
   const searchableText = [
@@ -158,14 +172,16 @@ export function getCardPresentation(task, config, detailsCollapsed = false) {
 }
 
 export function hasActiveTaskFilters(criteria) {
+  const hasSelection = (selection) =>
+    Array.isArray(selection) ? selection.length > 0 : Boolean(selection);
   return Boolean(
     normalizedText(criteria.search) ||
-      criteria.source ||
-    criteria.status ||
-      criteria.priority ||
-      criteria.category ||
-      criteria.area ||
-      criteria.dependency,
+    hasSelection(criteria.source) ||
+    hasSelection(criteria.status) ||
+    hasSelection(criteria.priority) ||
+    hasSelection(criteria.category) ||
+    hasSelection(criteria.area) ||
+    hasSelection(criteria.dependency),
   );
 }
 

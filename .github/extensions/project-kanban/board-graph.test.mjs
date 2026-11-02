@@ -112,7 +112,7 @@ test("projects shared filters, dependency context, focus paths and temporary rev
   const target = snapshot.tasks.find(({ id }) => id === crossSourceEdge.target);
   const prerequisite = snapshot.tasks.find(({ id }) => id === crossSourceEdge.source);
   const targetSource = snapshot.config.sources.find(({ path }) => path === target.source.document);
-  const criteria = { source: targetSource.key, search: target.id };
+  const criteria = { source: [targetSource.key, "__other_source__"], search: target.id };
   const filtered = projectGraphView(base, snapshot, criteria);
   assert.equal(filtered.nodes.find(({ id }) => id === target.id).matchKind, "match");
   assert.equal(filtered.nodes.find(({ id }) => id === prerequisite.id).matchKind, "context");

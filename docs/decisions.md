@@ -73,3 +73,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Persist a Ready status, infer a time-based critical path without duration data, or trigger agents from readiness.
 - **Decision:** Derive advisory readiness, blocked-work counts, unresolved/cycle counts, unique downstream impact and an unweighted longest dependency chain from each snapshot. Exclude completed tasks from readiness counts and cycle tasks from the longest-chain calculation. Describe the chain as structural, not a schedule critical path.
 - **Consequences:** No schema, persistence, status transition, claim, or execution path is added. Future agent execution requires a separate authorization and conflict design.
+
+## ADR-09: Keep multi-select filters shared and ephemeral
+
+- **Status:** Accepted
+- **Observations:** The Kanban board and dependency graph already share one in-memory filter state, but native single-value selects limit comparisons across categories, priorities, and dependency states.
+- **Assumptions:** Native checkbox groups and removable selection chips improve filtering without requiring task-schema or persistence changes.
+- **Alternatives considered:** Keep single-value selects, use native multi-select boxes, or persist named filter presets.
+- **Decision:** Use checkbox menus for source, status, priority, category, area, and dependency state. Values within a filter group use OR; different groups and search use AND. Show each active value as a removable chip and retain filter state only for the open canvas session.
+- **Consequences:** Kanban and graph behavior remain synchronized and Markdown/canonical order remain untouched. Saved views are deferred until user/workspace ownership and persistence are defined. Downstream-impact, dependency-depth, and blocked-count sorts are also deferred until their precise semantics and calculation cost are specified; future sorts must remain view-only.

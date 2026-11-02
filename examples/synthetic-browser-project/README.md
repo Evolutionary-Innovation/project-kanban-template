@@ -20,3 +20,9 @@ Completion Date values exercise lifecycle display, sorting, and completion
 behavior; selected records intentionally have unknown dates. The board
 populates Created Date when a task is created and replaces Completion Date on
 each transition into the configured completion status.
+
+The dependency graph includes a 23-task cross-source chain, broad branches,
+multi-prerequisite merges, a completed prerequisite, and an isolated task.
+Completed tasks depend only on completed prerequisites; `RM-017` is dependency
+ready while still incomplete. `RM-001`/`RM-002` form a pre-existing cycle, and
+`RM-019` references the unresolved `TD-999`.

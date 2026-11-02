@@ -25,6 +25,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   const workflowSummary = root.querySelector("#graph-workflow-summary");
   const criticalChain = root.querySelector("#graph-critical-chain");
   const wholeProjectButton = root.querySelector("#graph-whole-project");
+  const contextMenu = root.querySelector("#graph-context-menu");
   const errorPanel = root.querySelector("#graph-error");
   const errorMessage = root.querySelector("#graph-error-message");
   const zoomLabel = root.querySelector("#graph-zoom");
@@ -41,6 +42,12 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   const nodeElements = new Map();
   let latestSnapshot = null;
   let latestCriteria = {};
+  let pointerGesture = null;
+  let zoomSelectionBox = null;
+  let suppressNextNodeClick = false;
+  let suppressNodeClickTimer = 0;
+  let contextMenuTaskId = null;
+  let contextMenuInvoker = null;
   const scope = {
     focusId: null,
     expandUpstream: false,
@@ -144,6 +151,115 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     return button;
   }
 
+  function closeContextMenu(restoreFocus = false) {
+    if (contextMenu.hidden) return;
+    const invoker = contextMenuInvoker;
+    contextMenu.hidden = true;
+    contextMenu.replaceChildren();
+    contextMenuTaskId = null;
+    contextMenuInvoker = null;
+    if (restoreFocus && invoker?.isConnected) invoker.focus({ preventScroll: true });
+  }
+
+  function addContextMenuSeparator() {
+    const separator = document.createElement("div");
+    separator.setAttribute("role", "separator");
+    contextMenu.append(separator);
+  }
+
+  function addContextMenuAction(label, handler, { disabled = false, restoreFocus = true } = {}) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "graph-context-menu-item";
+    button.setAttribute("role", "menuitem");
+    button.textContent = label;
+    button.disabled = disabled;
+    button.addEventListener("click", () => {
+      const taskId = contextMenuTaskId;
+      closeContextMenu(false);
+      if (restoreFocus && taskId) nodeElements.get(taskId)?.focus({ preventScroll: true });
+      handler(taskId);
+    });
+    contextMenu.append(button);
+  }
+
+  function focusInspectorSection(taskId, selector) {
+    selectNode(taskId, true);
+    const section = inspector.querySelector(selector) ??
+      inspector.querySelector(".graph-inspector-relationships") ??
+      inspector.querySelector("h3");
+    section?.focus({ preventScroll: true });
+    section?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function openContextMenu(taskId, clientX, clientY, invoker = nodeElements.get(taskId)) {
+    const node = model?.nodes.find((candidate) => candidate.id === taskId);
+    if (!node) return;
+    if (selectedId !== taskId) selectNode(taskId);
+
+    contextMenu.replaceChildren();
+    contextMenuTaskId = taskId;
+    contextMenuInvoker = invoker?.isConnected ? invoker : nodeElements.get(taskId);
+    const sourceTask = latestSnapshot?.tasks.find((task) => task.id === taskId);
+    addContextMenuAction("Edit Task", () => {
+      if (sourceTask) onEditTask?.(sourceTask);
+    }, { disabled: !sourceTask, restoreFocus: false });
+    addContextMenuAction("Show On Board", () => {
+      if (sourceTask) onShowOnBoard?.(taskId);
+    }, { disabled: !sourceTask, restoreFocus: false });
+
+    addContextMenuSeparator();
+    addContextMenuAction("Focus Neighbourhood", () => focusNeighborhood(taskId), { disabled: !sourceTask });
+    addContextMenuAction("Expand Upstream Path", () => expandFocus(taskId, "upstream"), { disabled: !sourceTask });
+    addContextMenuAction("Expand Downstream Impact", () => expandFocus(taskId, "downstream"), { disabled: !sourceTask });
+
+    addContextMenuSeparator();
+    addContextMenuAction("Reset Zoom", () => setZoom(1, true));
+    addContextMenuAction("Fit View", fit);
+    addContextMenuAction("Whole Project", () => void resetScope(), { disabled: !scope.focusId });
+
+    addContextMenuSeparator();
+    addContextMenuAction("View Relationships", () =>
+      focusInspectorSection(taskId, ".graph-inspector-relationships"));
+    addContextMenuAction("View Dependency Details", () =>
+      focusInspectorSection(taskId, ".graph-inspector-dependency-details"));
+
+    contextMenu.hidden = false;
+    const nodeRect = contextMenuInvoker?.getBoundingClientRect();
+    const left = Number.isFinite(clientX) ? clientX : nodeRect?.left ?? 8;
+    const top = Number.isFinite(clientY) ? clientY : nodeRect?.bottom ?? 8;
+    contextMenu.style.left = `${left}px`;
+    contextMenu.style.top = `${top}px`;
+    contextMenu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - contextMenu.offsetWidth - 8))}px`;
+    contextMenu.style.top = `${Math.max(8, Math.min(top, window.innerHeight - contextMenu.offsetHeight - 8))}px`;
+    contextMenu.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+  }
+
+  contextMenu.addEventListener("keydown", (event) => {
+    const items = [...contextMenu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+    const index = items.indexOf(document.activeElement);
+    let nextIndex = null;
+    if (event.key === "ArrowDown") nextIndex = (index + 1 + items.length) % items.length;
+    else if (event.key === "ArrowUp") nextIndex = (index - 1 + items.length) % items.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = items.length - 1;
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      closeContextMenu(true);
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      closeContextMenu(true);
+    }
+    if (nextIndex !== null && items[nextIndex]) {
+      event.preventDefault();
+      items[nextIndex].focus();
+    }
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu(false);
+  });
+
   function renderInspector() {
     inspector.replaceChildren();
     const heading = document.createElement("h3");
@@ -166,25 +282,16 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       );
       if (scope.focusId) {
         actions.append(
-          actionButton(scope.expandUpstream ? "Upstream expanded" : "Expand upstream path", "expand-upstream", () => {
-            scope.expandUpstream = true;
-            void render(latestSnapshot, latestCriteria);
-          }),
-          actionButton(scope.expandDownstream ? "Downstream expanded" : "Expand downstream impact", "expand-downstream", () => {
-            scope.expandDownstream = true;
-            void render(latestSnapshot, latestCriteria);
-          }),
+          actionButton(scope.expandUpstream ? "Upstream expanded" : "Expand upstream path", "expand-upstream", () =>
+            expandFocus(scope.focusId, "upstream")),
+          actionButton(scope.expandDownstream ? "Downstream expanded" : "Expand downstream impact", "expand-downstream", () =>
+            expandFocus(scope.focusId, "downstream")),
         );
         actions.querySelector('[data-graph-action="expand-upstream"]').disabled = scope.expandUpstream;
         actions.querySelector('[data-graph-action="expand-downstream"]').disabled = scope.expandDownstream;
       } else {
-        actions.append(actionButton("Focus neighbourhood", "focus-neighbourhood", () => {
-          scope.focusId = node.id;
-          scope.expandUpstream = false;
-          scope.expandDownstream = false;
-          scope.revealedTaskId = null;
-          void render(latestSnapshot, latestCriteria);
-        }));
+        actions.append(actionButton("Focus neighbourhood", "focus-neighbourhood", () =>
+          focusNeighborhood(node.id)));
       }
       inspector.append(actions);
     }
@@ -213,6 +320,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     if (!node.unresolved) {
       const downstreamIds = getDownstreamTaskIds(latestSnapshot.dependencyGraph, node.id);
       const workflow = document.createElement("section");
+      workflow.className = "graph-inspector-dependency-details";
+      workflow.tabIndex = -1;
       const workflowHeading = document.createElement("h4");
       const readiness = document.createElement("p");
       const downstream = document.createElement("p");
@@ -245,11 +354,15 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     }
     const prerequisites = model.edges.filter(({ target }) => target === node.id).map(({ source }) => source);
     const dependents = model.edges.filter(({ source }) => source === node.id).map(({ target }) => target);
-    inspector.append(
+    const relationships = document.createElement("div");
+    relationships.className = "graph-inspector-relationships";
+    relationships.tabIndex = -1;
+    relationships.append(
       relationshipList("Depends On", prerequisites),
       relationshipList("Blocked By", node.blockedBy),
       relationshipList(node.unresolved ? "Referenced by" : "Direct dependents", dependents),
     );
+    inspector.append(relationships);
     for (const { label, value } of node.details) {
       const section = document.createElement("section");
       const title = document.createElement("h4");
@@ -300,6 +413,190 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     }
   }
 
+  function focusNeighborhood(taskId) {
+    const node = model?.nodes.find((candidate) => candidate.id === taskId);
+    if (!node || node.unresolved) return;
+    scope.focusId = taskId;
+    scope.expandUpstream = false;
+    scope.expandDownstream = false;
+    scope.revealedTaskId = null;
+    selectNode(taskId, true);
+    void render(latestSnapshot, latestCriteria);
+  }
+
+  function expandFocus(taskId, direction) {
+    const node = model?.nodes.find((candidate) => candidate.id === taskId);
+    if (!node || node.unresolved) return;
+    if (scope.focusId !== taskId) {
+      scope.focusId = taskId;
+      scope.expandUpstream = false;
+      scope.expandDownstream = false;
+      scope.revealedTaskId = null;
+    }
+    if (direction === "upstream") scope.expandUpstream = true;
+    else scope.expandDownstream = true;
+    selectNode(taskId, true);
+    void render(latestSnapshot, latestCriteria);
+  }
+
+  async function resetScope() {
+    scope.focusId = null;
+    scope.expandUpstream = false;
+    scope.expandDownstream = false;
+    scope.revealedTaskId = null;
+    await render(latestSnapshot, latestCriteria);
+  }
+
+  function graphBounds() {
+    const viewportRect = viewport.getBoundingClientRect();
+    const diagramRect = diagram.getBoundingClientRect();
+    const bounds = {
+      left: Math.max(viewportRect.left + viewport.clientLeft, diagramRect.left),
+      top: Math.max(viewportRect.top + viewport.clientTop, diagramRect.top),
+      right: Math.min(viewportRect.left + viewport.clientLeft + viewport.clientWidth, diagramRect.right),
+      bottom: Math.min(viewportRect.top + viewport.clientTop + viewport.clientHeight, diagramRect.bottom),
+    };
+    return bounds.right > bounds.left && bounds.bottom > bounds.top ? bounds : null;
+  }
+
+  function pointWithinGraph(event) {
+    const bounds = graphBounds();
+    if (!bounds) return null;
+    return {
+      x: Math.max(bounds.left, Math.min(event.clientX, bounds.right)),
+      y: Math.max(bounds.top, Math.min(event.clientY, bounds.bottom)),
+    };
+  }
+
+  function updateZoomSelection(event) {
+    if (!pointerGesture?.startPoint || !zoomSelectionBox) return;
+    const endPoint = pointWithinGraph(event);
+    if (!endPoint) return;
+    const viewportRect = viewport.getBoundingClientRect();
+    const left = Math.min(pointerGesture.startPoint.x, endPoint.x);
+    const top = Math.min(pointerGesture.startPoint.y, endPoint.y);
+    const width = Math.abs(pointerGesture.startPoint.x - endPoint.x);
+    const height = Math.abs(pointerGesture.startPoint.y - endPoint.y);
+    zoomSelectionBox.style.left = `${viewport.scrollLeft + left - viewportRect.left - viewport.clientLeft}px`;
+    zoomSelectionBox.style.top = `${viewport.scrollTop + top - viewportRect.top - viewport.clientTop}px`;
+    zoomSelectionBox.style.width = `${width}px`;
+    zoomSelectionBox.style.height = `${height}px`;
+  }
+
+  function zoomToSelection() {
+    if (!zoomSelectionBox) return;
+    const bounds = zoomSelectionBox.getBoundingClientRect();
+    const diagramRect = diagram.getBoundingClientRect();
+    const width = bounds.width / zoom;
+    const height = bounds.height / zoom;
+    if (width < 12 || height < 12) return;
+    const nextZoom = Math.min(
+      2,
+      (viewport.clientWidth - 40) / width,
+      (viewport.clientHeight - 40) / height,
+    );
+    if (!Number.isFinite(nextZoom) || nextZoom <= 0) return;
+    const centerX = (bounds.left + bounds.right) / 2;
+    const centerY = (bounds.top + bounds.bottom) / 2;
+    const worldX = (centerX - diagramRect.left) / zoom;
+    const worldY = (centerY - diagramRect.top) / zoom;
+    setZoom(nextZoom);
+    window.requestAnimationFrame(() => {
+      viewport.scrollLeft = Math.max(0, worldX * zoom - viewport.clientWidth / 2);
+      viewport.scrollTop = Math.max(0, worldY * zoom - viewport.clientHeight / 2);
+    });
+  }
+
+  function suppressDraggedNodeClick() {
+    suppressNextNodeClick = true;
+    window.clearTimeout(suppressNodeClickTimer);
+    suppressNodeClickTimer = window.setTimeout(() => {
+      suppressNextNodeClick = false;
+    }, 0);
+  }
+
+  function finishPointerGesture(event, cancelled = false) {
+    const gesture = pointerGesture;
+    if (!gesture || (event && gesture.pointerId !== event.pointerId)) return;
+    if (gesture.mode === "zoom" && !cancelled) zoomToSelection();
+    if (gesture.moved && gesture.nodeId) suppressDraggedNodeClick();
+    pointerGesture = null;
+    zoomSelectionBox?.remove();
+    zoomSelectionBox = null;
+    viewport.classList.remove("is-panning", "is-zoom-selecting");
+    if (viewport.hasPointerCapture?.(gesture.pointerId)) viewport.releasePointerCapture(gesture.pointerId);
+  }
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.pointerType !== "mouse" || pointerGesture) return;
+    const target = event.target instanceof Element ? event.target.closest(".graph-node") : null;
+    const startPoint = event.shiftKey ? pointWithinGraph(event) : null;
+    if (event.shiftKey && !startPoint) return;
+    pointerGesture = {
+      pointerId: event.pointerId,
+      nodeId: target?.dataset.taskId ?? null,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPoint,
+      startScrollLeft: viewport.scrollLeft,
+      startScrollTop: viewport.scrollTop,
+      mode: event.shiftKey ? "pending-zoom" : "pending-pan",
+      moved: false,
+    };
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    const gesture = pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.moved && Math.hypot(deltaX, deltaY) < 5) return;
+    gesture.moved = true;
+    if (gesture.mode === "pending-zoom") {
+      gesture.mode = "zoom";
+      zoomSelectionBox = document.createElement("div");
+      zoomSelectionBox.className = "graph-zoom-selection";
+      viewport.append(zoomSelectionBox);
+      viewport.classList.add("is-zoom-selecting");
+    } else if (gesture.mode === "pending-pan") {
+      gesture.mode = "pan";
+      viewport.classList.add("is-panning");
+    }
+    if (viewport.setPointerCapture && !viewport.hasPointerCapture(gesture.pointerId)) {
+      viewport.setPointerCapture(gesture.pointerId);
+    }
+    event.preventDefault();
+    if (gesture.mode === "pan") {
+      viewport.scrollLeft = gesture.startScrollLeft - deltaX;
+      viewport.scrollTop = gesture.startScrollTop - deltaY;
+    } else updateZoomSelection(event);
+  }, { passive: false });
+
+  window.addEventListener("pointerup", (event) => finishPointerGesture(event));
+  window.addEventListener("pointercancel", (event) => finishPointerGesture(event, true));
+
+  viewport.addEventListener("wheel", (event) => {
+    if (!event.shiftKey || !positions?.nodes.length) return;
+    event.preventDefault();
+    const diagramRect = diagram.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const worldX = Math.max(0, Math.min(positions.width, (event.clientX - diagramRect.left) / zoom));
+    const worldY = Math.max(0, Math.min(positions.height, (event.clientY - diagramRect.top) / zoom));
+    const delta = event.deltaY || event.deltaX;
+    const factor = Math.exp(Math.max(-0.5, Math.min(0.5, -delta * 0.002)));
+    setZoom(zoom * factor);
+    window.requestAnimationFrame(() => {
+      viewport.scrollLeft = Math.max(0, worldX * zoom - (event.clientX - viewportRect.left - viewport.clientLeft));
+      viewport.scrollTop = Math.max(0, worldY * zoom - (event.clientY - viewportRect.top - viewport.clientTop));
+    });
+  }, { passive: false });
+
+  viewport.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    const target = event.target instanceof Element ? event.target.closest(".graph-node") : null;
+    if (target) openContextMenu(target.dataset.taskId, event.clientX, event.clientY, target);
+  });
+
   function drawDiagram() {
     diagram.replaceChildren();
     nodeElements.clear();
@@ -339,6 +636,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         "data-priority-tone": node.priorityTone,
         role: "button", tabindex: node.id === focusedId ? 0 : -1,
         "aria-label": nodeLabel(node), "aria-pressed": node.id === selectedId,
+        "aria-keyshortcuts": "Enter Space ContextMenu Shift+F10",
       });
       group.append(svgElement("rect", { width: position.width, height: position.height, rx: 10 }));
       group.append(svgElement("text", { x: 14, y: 23, class: "graph-node-id" }, node.id.length > 29 ? `${node.id.slice(0, 26)}...` : node.id));
@@ -352,7 +650,25 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         ...(node.hasCycle ? ["Cycle"] : []),
       ].join(" / ");
       if (warning) group.append(svgElement("text", { x: 14, y: 102, class: "graph-node-warning" }, warning));
-      group.addEventListener("click", () => selectNode(node.id));
+      group.addEventListener("click", (event) => {
+        if (suppressNextNodeClick) {
+          event.preventDefault();
+          event.stopPropagation();
+          suppressNextNodeClick = false;
+          window.clearTimeout(suppressNodeClickTimer);
+          return;
+        }
+        selectNode(node.id);
+      });
+      group.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        if (event.shiftKey) {
+          focusNeighborhood(node.id);
+          return;
+        }
+        const task = latestSnapshot?.tasks.find(({ id }) => id === node.id);
+        if (task) onEditTask?.(task);
+      });
       group.addEventListener("focus", () => {
         focusedId = node.id;
         for (const [id, element] of nodeElements) element.setAttribute("tabindex", id === focusedId ? "0" : "-1");
@@ -368,6 +684,10 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
           const index = event.key === "Home" ? 0 : event.key === "End" ? ids.length - 1
             : (ids.indexOf(node.id) + step + ids.length) % ids.length;
           selectNode(ids[index], true);
+        } else if (event.key === "ContextMenu" || event.key === "Menu" || (event.shiftKey && event.key === "F10")) {
+          event.preventDefault();
+          const bounds = group.getBoundingClientRect();
+          openContextMenu(node.id, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, group);
         } else if (event.key === "Escape") {
           event.preventDefault();
           root.querySelector('[data-graph-zoom="fit"]').focus();
@@ -438,7 +758,9 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
 
   function fail(text, view = null) {
     generation += 1;
+    finishPointerGesture(null, true);
     stopLayout();
+    closeContextMenu(false);
     model = view;
     selectedId = null;
     nodeElements.clear();
@@ -462,6 +784,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
 
   async function render(snapshot, criteria = latestCriteria) {
     const request = ++generation;
+    finishPointerGesture(null, true);
+    closeContextMenu(false);
     stopLayout();
     const restoreId = document.activeElement?.closest(".graph-node")?.dataset.taskId;
     const restoreRetryFocus = document.activeElement === root.querySelector("#graph-retry");
@@ -535,14 +859,13 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   return {
     render,
     fail,
-    suspend: () => { generation += 1; stopLayout(); },
-    async resetScope() {
-      scope.focusId = null;
-      scope.expandUpstream = false;
-      scope.expandDownstream = false;
-      scope.revealedTaskId = null;
-      await render(latestSnapshot, latestCriteria);
+    suspend: () => {
+      generation += 1;
+      finishPointerGesture(null, true);
+      stopLayout();
+      closeContextMenu(false);
     },
+    resetScope,
     selectTask: (id, focus = false) => selectNode(id, focus),
     async showTask(id) {
       if (!latestSnapshot?.tasks.some((task) => task.id === id)) {

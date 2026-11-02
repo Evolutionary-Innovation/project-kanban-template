@@ -1,4 +1,4 @@
-# Project Kanban Template v2.0.0
+# Project Kanban Template v2.1.0
 
 A GitHub repository template for a Markdown-backed project-management canvas. Copy it into a project rather than installing a shared runtime dependency.
 
@@ -33,7 +33,7 @@ A GitHub repository template for a Markdown-backed project-management canvas. Co
 
 To try the board with representative browser-test data, run `node examples/synthetic-browser-project/serve.mjs` and open the loopback URL it prints. The fixture records are fictional and do not alter the template's actual task registers.
 
-Kanban remains the default editing interface. Choose **Dependencies** for a read-only graph overview, including isolated tasks. Shared search and multi-select filters apply in both views; selections within one filter use OR, and filter groups use AND. Removable chips expose individual active filter values. Matching tasks remain distinct from prerequisite context. Focus a task to inspect its direct neighbourhood, then optionally expand upstream or downstream paths. The graph inspector shows unique downstream impact, and the graph highlights the longest unweighted chain with cycle tasks excluded. This is structural information, not a duration-based critical path.
+Kanban remains the default editing interface. Choose **Dependencies** for a read-only graph overview, including isolated tasks. Shared search and multi-select filters apply in both views; selections within one filter use OR, and filter groups use AND. Removable chips expose individual active filter values. Matching tasks remain distinct from prerequisite context. Click a node to inspect it, double-click to edit through the existing task editor, or Shift+double-click to focus its neighbourhood; expand upstream/downstream paths from the inspector or context menu. Drag to pan, Shift+drag to zoom to a selection, and Shift+wheel to zoom around the pointer. Right-click or Shift+F10 opens the accessible graph context menu. The graph inspector shows unique downstream impact, and the graph highlights the longest unweighted chain with cycle tasks excluded. This is structural information, not a duration-based critical path.
 
 Dependency readiness is derived from completion and dependency state, is advisory only, and never changes status or authorizes execution. Graph-launched edits use the existing Kanban editor and persistence transaction. No task automation is introduced.
 

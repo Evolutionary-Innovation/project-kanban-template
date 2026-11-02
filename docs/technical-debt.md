@@ -10,6 +10,10 @@ The secondary graph's pinned Dagre layout runs in a worker so layout does not bl
 
 The UI reports the failure explicitly and retains the fresh snapshot's accessible relationship list; users can return to Kanban without altering tasks. Do not silently truncate the graph or rewrite dependencies to avoid this failure. Reassess deeper-layout support, a newer engine, or ELK only against representative project demand and benchmarks. Shared graph filtering and focus mode are implemented in Stage 2; they do not bypass the layout limit.
 
+### Dense graph navigation
+
+The graph supports direct pan, zoom-to-selection, pointer-anchored wheel zoom, and focus/whole-project controls, but has no minimap or viewport locator. The 60-task synthetic graph is navigable, though users must reorient with fit, focus, and manual pan when moving between distant regions. Consider a lightweight overview only if representative Trade-MSTR boards show this remains a usability burden; preserve the accessible task list and keyboard controls.
+
 ### Duration-based critical path
 
 The schema has no task-duration estimates, so workflow intelligence can show only an unweighted longest dependency chain. Do not label it as a schedule critical path. Add duration fields or scheduling constraints only after a separate schema and migration decision based on real project needs.

@@ -58,11 +58,38 @@ test("projects all synthetic tasks, unresolved placeholders and cycle warnings w
   const model = createGraphView(snapshot);
   assert.equal(model.taskCount, 60);
   assert.equal(model.nodes.length, 61);
-  assert.equal(model.edges.length, 10);
+  assert.equal(model.edges.length, 50);
   assert.equal(model.unresolvedCount, 1);
   assert.equal(model.cycleCount, 2);
   assert.equal(model.nodes.find(({ id }) => id === "TD-999").unresolved, true);
   assert.deepEqual(model.nodes.filter(({ hasCycle }) => hasCycle).map(({ id }) => id), ["RM-001", "RM-002"]);
+  assert.deepEqual(
+    model.edges.filter(({ source }) => source === "RA-001").map(({ target }) => target).sort(),
+    ["RA-002", "RM-006", "TD-01", "TD-02"],
+  );
+  assert.deepEqual(
+    model.edges.filter(({ source }) => source === "RM-010").map(({ target }) => target).sort(),
+    ["RM-009", "RM-011", "TD-07", "TD-08"],
+  );
+  assert.deepEqual(
+    model.edges.filter(({ target }) => target === "RM-012").map(({ source }) => source).sort(),
+    ["RA-010", "TD-07", "TD-08", "TD-15"],
+  );
+  assert.deepEqual(model.workflow.longestChainIds, [
+    "RA-001", "TD-01", "RM-003", "RA-003", "TD-04", "RM-004", "RA-004",
+    "TD-05", "RM-005", "RA-005", "RM-010", "RM-011", "RA-013", "TD-15",
+    "RM-012", "RA-011", "RM-014", "TD-10", "RA-012", "RA-016", "TD-17",
+    "RM-022", "RA-014",
+  ]);
+  assert.equal(snapshot.tasks.find(({ id }) => id === "RM-017").dependencyView.isBlocked, false);
+  assert.equal(model.edges.some(({ source, target }) => source === "RM-024" || target === "RM-024"), false);
+  const taskById = new Map(snapshot.tasks.map((task) => [task.id, task]));
+  for (const task of snapshot.tasks.filter(({ status }) => status === snapshot.config.completionStatus)) {
+    for (const prerequisiteId of task.dependencyView.dependsOn) {
+      assert.equal(taskById.get(prerequisiteId)?.status, snapshot.config.completionStatus,
+        `Completed ${task.id} must not depend on an incomplete or unresolved task.`);
+    }
+  }
   for (const edge of model.edges) {
     assert.equal(edge.blocking, snapshot.tasks.find(({ id }) => id === edge.target).dependencyView.blockedBy.includes(edge.source));
   }

@@ -273,6 +273,54 @@ h1 span {
   opacity: 0.5;
 }
 
+.graph-context-menu {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(70vh, 520px);
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid #b8c9cd;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgb(23 42 58 / 20%);
+}
+
+.graph-context-menu[hidden] {
+  display: none;
+}
+
+.graph-context-menu-item {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #172a3a;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.graph-context-menu-item:hover:not(:disabled),
+.graph-context-menu-item:focus-visible {
+  outline: 2px solid #398785;
+  outline-offset: -2px;
+  background: #e5f1ef;
+}
+
+.graph-context-menu-item:disabled {
+  color: #829097;
+  cursor: default;
+}
+
+.graph-context-menu [role="separator"] {
+  height: 1px;
+  margin: 4px 8px;
+  background: #d3e1e3;
+}
+
 .graph-scope-controls {
   display: flex;
   justify-content: flex-end;
@@ -302,6 +350,7 @@ h1 span {
 }
 
 .graph-viewport {
+  position: relative;
   height: min(65vh, 680px);
   min-height: 320px;
   overflow: auto;
@@ -309,6 +358,35 @@ h1 span {
   border-radius: 12px;
   background: #edf2f4;
   scrollbar-color: #b7c8cd transparent;
+  cursor: grab;
+  user-select: none;
+  touch-action: pan-x pan-y;
+}
+
+.graph-viewport.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.graph-viewport.is-panning .graph-node {
+  cursor: grabbing;
+}
+
+.graph-viewport.is-zoom-selecting {
+  cursor: crosshair;
+  user-select: none;
+}
+
+.graph-viewport.is-zoom-selecting .graph-node {
+  cursor: crosshair;
+}
+
+.graph-zoom-selection {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid #235d5b;
+  background: rgb(57 135 133 / 18%);
+  pointer-events: none;
 }
 
 #graph-diagram {
@@ -485,7 +563,9 @@ h1 span {
 
 .graph-link:focus-visible,
 .graph-viewport:focus-visible,
-.graph-relationships summary:focus-visible {
+.graph-relationships summary:focus-visible,
+.graph-inspector-relationships:focus-visible,
+.graph-inspector-dependency-details:focus-visible {
   outline: 3px solid #398785;
   outline-offset: 3px;
 }

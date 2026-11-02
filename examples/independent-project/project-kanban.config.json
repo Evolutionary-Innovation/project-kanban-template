@@ -1,0 +1,37 @@
+{
+  "configVersion": 1,
+  "projectName": "Field Notes",
+  "boardTitle": "Field Notes Work Board",
+  "schemaMarker": "<!-- project-kanban-schema:1 -->",
+  "statuses": ["Open", "Doing", "Done"],
+  "priorities": [
+    { "name": "Urgent", "tone": "high" },
+    { "name": "Standard", "tone": "medium" },
+    { "name": "Whenever", "tone": "low" }
+  ],
+  "defaultStatus": "Open",
+  "sources": [
+    {
+      "key": "plans",
+      "label": "Plan",
+      "path": "docs/plans.md",
+      "idPrefix": "PLAN",
+      "idWidth": 3,
+      "category": "Planning",
+      "categoryTone": "orange",
+      "extraFields": []
+    },
+    {
+      "key": "experiments",
+      "label": "Experiment",
+      "path": "docs/experiments.md",
+      "idPrefix": "EXP",
+      "idWidth": 3,
+      "category": "Experiment",
+      "categoryTone": "slate",
+      "extraFields": [
+        { "key": "hypothesis", "label": "Hypothesis", "type": "textarea", "required": true }
+      ]
+    }
+  ]
+}

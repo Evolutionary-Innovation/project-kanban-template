@@ -1,0 +1,55 @@
+{
+  "configVersion": 1,
+  "projectName": "Project Kanban Template",
+  "boardTitle": "Project Kanban",
+  "schemaMarker": "<!-- project-kanban-schema:1 -->",
+  "statuses": [
+    "Complete",
+    "In Progress",
+    "Planned",
+    "Research",
+    "Future Ideas"
+  ],
+  "priorities": [
+    { "name": "High", "tone": "high" },
+    { "name": "Medium", "tone": "medium" },
+    { "name": "Low", "tone": "low" }
+  ],
+  "defaultStatus": "Planned",
+  "sources": [
+    {
+      "key": "roadmap",
+      "label": "Roadmap Item",
+      "path": "docs/roadmap.md",
+      "idPrefix": "RM",
+      "idWidth": 3,
+      "category": "Roadmap",
+      "categoryTone": "blue",
+      "extraFields": []
+    },
+    {
+      "key": "technicalDebt",
+      "label": "Technical Debt",
+      "path": "docs/technical-debt.md",
+      "idPrefix": "TD",
+      "idWidth": 2,
+      "category": "Technical Debt",
+      "categoryTone": "purple",
+      "extraFields": [
+        { "key": "limitation", "label": "Limitation", "type": "textarea" },
+        { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
+        { "key": "rationale", "label": "Rationale", "type": "textarea" }
+      ]
+    },
+    {
+      "key": "repositoryAudit",
+      "label": "Research/Audit Item",
+      "path": "docs/repository-audit.md",
+      "idPrefix": "RA",
+      "idWidth": 3,
+      "category": "Research/Audit",
+      "categoryTone": "green",
+      "extraFields": []
+    }
+  ]
+}

@@ -379,9 +379,9 @@ function text(value, label) {
   return value.trim();
 }
 
-function textList(value, label) {
+function textList(value, label, rawAnswer) {
   if (!Array.isArray(value)) {
-    throw new PlanningError("planning_response_invalid", `The planning response has an invalid ${label} list.`);
+    throw new PlanningError("planning_response_invalid", `The planning response has an invalid ${label} list.`, rawAnswer);
   }
   return value.map((item, index) => text(item, `${label} item ${index + 1}`));
 }
@@ -630,7 +630,7 @@ function parseDeliveryRoutes(value, assessment, recommendation, context, rawAnsw
         relationshipKinds,
         relationshipRationale: text(step.relationshipRationale, `${label}, step ${stepIndex + 1} relationship rationale`),
         recordedPrerequisiteIds,
-        evidence: textList(step.evidence, `${label}, step ${stepIndex + 1} evidence`),
+        evidence: textList(step.evidence, `${label}, step ${stepIndex + 1} evidence`, rawAnswer),
         confidence: {
           level: confidence(step.confidence?.level, `${label}, step ${stepIndex + 1} confidence`),
           rationale: text(step.confidence?.rationale, `${label}, step ${stepIndex + 1} confidence rationale`),
@@ -735,11 +735,11 @@ function parseDeliveryRoutes(value, assessment, recommendation, context, rawAnsw
       intendedOutcome: text(route.intendedOutcome, `${label} intended outcome`),
       goalAlignment: text(route.goalAlignment, `${label} goal alignment`),
       strategyRationale: text(route.strategyRationale, `${label} strategy rationale`),
-      evidence: textList(route.evidence, `${label} evidence`),
-      goalEvidence: textList(route.goalEvidence, `${label} goal evidence`),
-      tradeoffs: textList(route.tradeoffs, `${label} trade-offs`),
-      assumptions: textList(route.assumptions, `${label} assumptions`),
-      risks: textList(route.risks, `${label} risks`),
+      evidence: textList(route.evidence, `${label} evidence`, rawAnswer),
+      goalEvidence: textList(route.goalEvidence, `${label} goal evidence`, rawAnswer),
+      tradeoffs: textList(route.tradeoffs, `${label} trade-offs`, rawAnswer),
+      assumptions: textList(route.assumptions, `${label} assumptions`, rawAnswer),
+      risks: textList(route.risks, `${label} risks`, rawAnswer),
       stoppingPoint: text(route.stoppingPoint, `${label} stopping point`),
       confidence: confidenceResult,
       externalPrerequisites,
@@ -867,6 +867,7 @@ export function buildNextWorkPrompt(context) {
     "Make routes strategically distinct by outcome, investment order, risk posture, or emphasis—not merely different labels or first tasks. Routes may share tasks, including their first task. Do not force alternatives.",
     "For every route explain its intended outcome, explicit goal alignment (or disclose missing goal evidence), strategy rationale, trade-offs, assumptions, risks, confidence, and a sensible stopping point.",
     "For every task explain its contribution, why it starts or follows the preceding route work, expected benefit, what it unlocks, supporting evidence, and confidence with rationale. For steps after the first, distinguish practical_enablement, strategic_ordering, and recorded_prerequisite in relationshipKinds. A transition may have more than one of these kinds. The first step has an empty relationshipKinds array and explains why it starts the route.",
+    "Every route must include evidence as a JSON array of strings (use [] only when no route-level evidence is available). Do not omit the evidence field or return it as a string, object, or null. Route step evidence must also be a JSON array of strings.",
     "For each step, recordedPrerequisiteIds must exactly reproduce that task's canonical dependsOn list. Use relationshipKinds recorded_prerequisite only when a canonical edge links an earlier route step to this task. A completed prerequisite need not be a route step. Every unfinished known prerequisite not earlier in the route must appear once in the route's externalPrerequisites with a rationale and condition. Every unresolved dependency ID from a route task must appear once in unresolvedPrerequisites with a rationale. Do not place an unfinished prerequisite after its dependent.",
     "A route stops when a useful outcome is achieved, work enters another strategic phase, a decision/evidence gap prevents defensible continuation, or the five-task horizon is reached. State why it stops; do not silently omit prerequisites.",
     "Score confidence separately for the immediate recommendation, each step, and the route as a whole. Use High, Medium, or Low with rationale. The route confidence must account for evidence quality, prerequisite coverage, assumptions, and uncertainty; a high-confidence first task does not make the entire route high-confidence.",

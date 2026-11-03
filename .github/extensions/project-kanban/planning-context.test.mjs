@@ -418,6 +418,25 @@ test("preserves expanded reasoning and multi-task routes without changing canoni
   assert.deepEqual(context.board.canonicalDependencies, [{ prerequisiteId: "TD-001", dependentId: "RM-001" }]);
 });
 
+test("requires route evidence arrays and retains the invalid raw response", () => {
+  const context = createContext();
+  const answer = JSON.parse(validAnswer());
+  answer.deliveryRoutes[0].evidence = "TD-001, RM-001, and RM-002 support this route.";
+  const rawAnswer = JSON.stringify(answer);
+
+  assert.throws(
+    () => parsePlanningAnswer(rawAnswer, context),
+    (error) =>
+      error instanceof PlanningError &&
+      error.message === "The planning response has an invalid delivery route 1 evidence list." &&
+      error.rawAnswer === rawAnswer,
+  );
+
+  answer.deliveryRoutes[0].evidence = ["TD-001 task record", "RM-001 task record", "RM-002 task record"];
+  const plan = parsePlanningAnswer(JSON.stringify(answer), context);
+  assert.deepEqual(plan.deliveryRoutes[0].evidence, answer.deliveryRoutes[0].evidence);
+});
+
 test("rejects routes that invent tasks or conflict with their recommendation", () => {
   const context = createContext();
   const missingRouteAnswer = JSON.parse(validAnswer());
@@ -609,6 +628,7 @@ test("builds a planning-only prompt that preserves analysis and separates depend
   assert.match(prompt, /Do not compress, paraphrase away, or omit relevant analysis/);
   assert.match(prompt, /coherent delivery routes exist through the next phase/);
   assert.match(prompt, /deliveryRoutes/);
+  assert.match(prompt, /Every route must include evidence as a JSON array of strings/);
   assert.match(prompt, /strategic ordering are planning judgement only/);
   assert.match(prompt, /do not create Depends On entries, graph edges, blockers, readiness, or workflow analytics/);
   assert.match(prompt, /suggestedDependencies/);

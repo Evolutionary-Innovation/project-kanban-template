@@ -10,6 +10,12 @@ import {
   sortTasks,
 } from "./board-view.mjs";
 
+const PLANNING_ROUTE_RELATIONSHIPS = Object.freeze({
+  recorded_prerequisite: "recorded prerequisite",
+  practical_enablement: "practical enablement",
+  strategic_ordering: "strategic ordering",
+});
+
 const boardElement = document.querySelector("#board");
 const statusElement = document.querySelector("#status");
 const sourcesElement = document.querySelector("#sources");
@@ -1210,83 +1216,109 @@ function renderPlanningList(element, items, emptyMessage) {
   }
 }
 
-function renderPlanningPaths(plan) {
-  const list = document.querySelector("#planning-path-list");
+function appendRouteList(card, headingText, items, emptyText) {
+  const heading = document.createElement("h5");
+  heading.textContent = headingText;
+  const list = document.createElement("ul");
+  if (items.length === 0) {
+    const empty = document.createElement("li");
+    empty.textContent = emptyText;
+    list.append(empty);
+  } else {
+    for (const text of items) {
+      const item = document.createElement("li");
+      item.textContent = text;
+      list.append(item);
+    }
+  }
+  card.append(heading, list);
+}
+
+function renderPlanningRoutes(plan) {
+  const list = document.querySelector("#planning-route-list");
   list.replaceChildren();
-  if (!plan.recommendation && plan.alternativePaths.length === 0) {
+  const assessment = document.querySelector("#planning-route-assessment");
+  assessment.textContent = plan.routeAssessment.explanation;
+  if (plan.deliveryRoutes.length === 0) {
     const empty = document.createElement("p");
-    empty.textContent = "No defensible implementation paths were identified.";
+    empty.textContent = "No multi-task delivery route is supported by the available evidence.";
     list.append(empty);
     return;
   }
 
-  const paths = [
-    ...(plan.recommendation ? [{
-      label: "Recommended path",
-      taskId: plan.recommendation.taskId,
-      title: plan.recommendation.title,
-      approach: plan.recommendation.whyNow,
-      tradeoff: plan.recommendation.unlocks,
-      confidence: plan.recommendation.confidence,
-      recommended: true,
-      sequence: plan.implementationSequences.find(({ pathType }) => pathType === "recommended"),
-    }] : []),
-    ...plan.alternativePaths.map((path) => ({
-      ...path,
-      recommended: false,
-      sequence: plan.implementationSequences.find((sequence) =>
-        sequence.pathType === "alternative" &&
-        sequence.label === path.label &&
-        sequence.steps[0]?.taskId === path.taskId
-      ),
-    })),
-  ];
-
-  for (const path of paths) {
+  for (const route of plan.deliveryRoutes) {
     const card = document.createElement("article");
-    card.className = "planning-path";
-    card.dataset.recommended = String(path.recommended);
+    card.className = "planning-route";
+    card.dataset.recommended = String(route.recommended);
+
     const heading = document.createElement("h4");
-    heading.textContent = `${path.label}: ${path.taskId}: ${path.title}`;
-    const approach = document.createElement("p");
-    approach.textContent = `Approach: ${path.approach}`;
-    const tradeoff = document.createElement("p");
-    tradeoff.textContent = `Trade-off: ${path.tradeoff}`;
+    heading.textContent = route.recommended ? `${route.name} — Recommended route` : route.name;
+    const outcome = document.createElement("p");
+    outcome.textContent = `Intended outcome: ${route.intendedOutcome}`;
+    const alignment = document.createElement("p");
+    alignment.textContent = `Goal alignment: ${route.goalAlignment}`;
+    const rationale = document.createElement("p");
+    rationale.textContent = `Strategy: ${route.strategyRationale}`;
     const confidenceLabel = document.createElement("p");
-    confidenceLabel.textContent = `Confidence: ${path.confidence}`;
-    card.append(heading, approach, tradeoff, confidenceLabel);
+    confidenceLabel.textContent =
+      `Route confidence: ${route.confidence.level} — ${route.confidence.rationale}`;
+    const stoppingPoint = document.createElement("p");
+    stoppingPoint.textContent = `Stopping point: ${route.stoppingPoint}`;
+    card.append(heading, outcome, alignment, rationale, confidenceLabel, stoppingPoint);
 
-    const sequenceHeading = document.createElement("h5");
-    sequenceHeading.className = "planning-path-sequence-heading";
-    sequenceHeading.textContent = "Suggested implementation sequence";
-    const sequenceList = document.createElement("ol");
-    sequenceList.className = "planning-path-sequence";
-    if (path.sequence) {
-      for (const step of path.sequence.steps) {
-        const item = document.createElement("li");
-        const task = document.createElement("p");
-        task.className = "planning-sequence-step-title";
-        task.textContent = `${step.taskId}: ${step.title}`;
+    appendRouteList(card, "Trade-offs", route.tradeoffs, "No material trade-offs reported.");
+    appendRouteList(card, "Assumptions", route.assumptions, "No material assumptions reported.");
+    appendRouteList(card, "Risks", route.risks, "No route-specific risks reported.");
+    appendRouteList(card, "Evidence", route.evidence, "No route evidence supplied.");
+    appendRouteList(card, "Goal evidence", route.goalEvidence, "No explicit goal evidence supplied.");
+    appendRouteList(
+      card,
+      "Unfinished recorded prerequisites outside this route",
+      route.externalPrerequisites.map(({ taskId, title, rationale: reason, condition }) =>
+        `${taskId}: ${title}. ${reason} Condition: ${condition}`,
+      ),
+      "None reported.",
+    );
+    appendRouteList(
+      card,
+      "Unresolved recorded prerequisites",
+      route.unresolvedPrerequisites.map(({ taskId, rationale: reason }) => `${taskId}: ${reason}`),
+      "None reported.",
+    );
 
-        const rationale = document.createElement("p");
-        rationale.textContent = `Rationale: ${step.rationale}`;
-        const benefit = document.createElement("p");
-        benefit.textContent = `Expected benefit: ${step.benefit}`;
-        const unlocks = document.createElement("p");
-        unlocks.textContent = `What it unlocks: ${step.unlocks}`;
-        const confidenceLabel = document.createElement("p");
-        confidenceLabel.textContent = `Confidence: ${step.confidence}`;
-
-        item.append(task, rationale, benefit, unlocks, confidenceLabel);
-        sequenceList.append(item);
-      }
-    } else {
+    const stepsHeading = document.createElement("h5");
+    stepsHeading.className = "planning-route-steps-heading";
+    stepsHeading.textContent = "Route steps — advisory ordering, not dependencies";
+    const steps = document.createElement("ol");
+    steps.className = "planning-route-steps";
+    steps.setAttribute("aria-label", `${route.name} route steps`);
+    for (const step of route.steps) {
       const item = document.createElement("li");
-      item.textContent = "No defensible sequence was identified for this path.";
-      sequenceList.append(item);
-    }
+      const task = document.createElement("p");
+      task.className = "planning-route-step-title";
+      task.textContent = `${step.taskId}: ${step.title}`;
 
-    card.append(sequenceHeading, sequenceList);
+      const relationship = document.createElement("p");
+      relationship.textContent = step.relationshipKinds.length === 0
+        ? `Route starting point. ${step.relationshipRationale}`
+        : `Relationship to prior route work: ${step.relationshipKinds
+          .map((kind) => PLANNING_ROUTE_RELATIONSHIPS[kind] ?? kind)
+          .join(", ")}. ${step.relationshipRationale}`;
+      const details = document.createElement("p");
+      details.textContent =
+        `Contribution: ${step.contribution} Rationale: ${step.rationale} ` +
+        `Expected benefit: ${step.benefit} Unlocks: ${step.unlocks}`;
+      const recordedPrerequisites = document.createElement("p");
+      recordedPrerequisites.textContent = step.recordedPrerequisiteIds.length === 0
+        ? "Recorded prerequisites: none."
+        : `Recorded prerequisites: ${step.recordedPrerequisiteIds.join(", ")}.`;
+      const confidenceLabel = document.createElement("p");
+      confidenceLabel.textContent =
+        `Step confidence: ${step.confidence.level} — ${step.confidence.rationale}`;
+      item.append(task, relationship, details, recordedPrerequisites, confidenceLabel);
+      steps.append(item);
+    }
+    card.append(stepsHeading, steps);
     list.append(card);
   }
 }
@@ -1358,7 +1390,7 @@ function renderPlanningResult(payload) {
   document.querySelector("#planning-confidence").textContent =
     `Planning confidence: ${plan.planningConfidence.level} — ${plan.planningConfidence.rationale}`;
 
-  renderPlanningPaths(plan);
+  renderPlanningRoutes(plan);
   renderPlanningCoverage(payload, plan);
 
   const riskList = document.querySelector("#planning-risks");

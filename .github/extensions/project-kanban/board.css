@@ -225,13 +225,13 @@
   font-size: 0.78rem;
 }
 
-.planning-path-list {
+.planning-route-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 10px;
 }
 
-.planning-path {
+.planning-route {
   min-width: 0;
   padding: 12px;
   border: 1px solid #d3e1e3;
@@ -239,12 +239,19 @@
   background: #f7faf9;
 }
 
-.planning-path h4 {
+.planning-route h4 {
   margin-top: 0;
   overflow-wrap: anywhere;
 }
 
-.planning-path p {
+.planning-route h5 {
+  margin: 12px 0 5px;
+  color: #294c5c;
+  font-size: 0.78rem;
+}
+
+.planning-route p,
+.planning-route li {
   margin: 7px 0;
   color: #536b76;
   font-size: 0.8rem;
@@ -252,12 +259,12 @@
   overflow-wrap: anywhere;
 }
 
-.planning-path[data-recommended="true"] {
+.planning-route[data-recommended="true"] {
   border-color: #83b4b1;
   background: #f3fbf9;
 }
 
-.planning-path-sequence-heading {
+.planning-route-steps-heading {
   margin: 12px 0 0;
   padding-top: 10px;
   border-top: 1px solid #dce6e6;
@@ -265,7 +272,7 @@
   font-size: 0.78rem;
 }
 
-.planning-path-sequence {
+.planning-route-steps {
   margin: 0;
   padding-left: 26px;
   color: #536b76;
@@ -274,25 +281,21 @@
   list-style-position: outside;
 }
 
-.planning-path-sequence li {
+.planning-route-steps li {
   margin: 10px 0;
   padding-left: 4px;
   overflow-wrap: anywhere;
 }
 
-.planning-path-sequence li:first-child {
+.planning-route-steps li:first-child {
   margin-top: 0;
 }
 
-.planning-path-sequence li:last-child {
+.planning-route-steps li:last-child {
   margin-bottom: 0;
 }
 
-.planning-path-sequence li p {
-  margin: 3px 0;
-}
-
-.planning-sequence-step-title {
+.planning-route-step-title {
   color: #294c5c;
   font-weight: 750;
 }

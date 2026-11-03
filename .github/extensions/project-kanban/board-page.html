@@ -108,12 +108,13 @@
         <p id="planning-unlocks"></p>
         <p id="planning-confidence"></p>
         <section id="planning-paths" class="planning-subsection" aria-labelledby="planning-paths-heading">
-          <h3 id="planning-paths-heading">Implementation paths</h3>
+          <h3 id="planning-paths-heading">Delivery routes</h3>
           <p class="planning-scope-warning">
-            Sequence order is planning judgement, not a dependency. Only entries in Recorded Dependencies are canonical;
-            order does not create Depends On entries, graph edges, blockers, readiness, or workflow analytics.
+            Route steps show strategic planning judgement, not a dependency graph. Only entries in Recorded Dependencies
+            are canonical; route order does not create Depends On entries, graph edges, blockers, readiness, or workflow analytics.
           </p>
-          <div id="planning-path-list" class="planning-path-list"></div>
+          <p id="planning-route-assessment" role="status"></p>
+          <div id="planning-route-list" class="planning-route-list"></div>
         </section>
         <section class="planning-subsection" aria-labelledby="planning-coverage-heading">
           <h3 id="planning-coverage-heading">Planning confidence and coverage</h3>

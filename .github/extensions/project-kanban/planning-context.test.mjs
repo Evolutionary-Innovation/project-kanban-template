@@ -129,15 +129,76 @@ function createContext(currentView) {
   return buildPlanningContext({ board, documents, currentView });
 }
 
-function validAnswer(recommendationId = "RM-001") {
+function routeStep(taskId, {
+  contribution = "Advances the route outcome.",
+  rationale = "This task contributes useful project progress.",
+  relationshipKinds = [],
+  recordedPrerequisiteIds = [],
+} = {}) {
+  return {
+    taskId,
+    contribution,
+    rationale,
+    benefit: "Improves the quality or delivery of the project.",
+    unlocks: "Supports the next part of this route.",
+    relationshipKinds,
+    relationshipRationale: "This position is supported by the route strategy.",
+    recordedPrerequisiteIds,
+    evidence: [`${taskId} task record`],
+    confidence: {
+      level: "Medium",
+      rationale: "The task description supports this contribution.",
+    },
+  };
+}
+
+function deliveryRoute({
+  name = "Data-first analytics",
+  recommended = true,
+  steps = [
+    routeStep("TD-001", { rationale: "Resolve data validation first." }),
+    routeStep("RM-001", {
+      rationale: "Build analytics after data validation.",
+      relationshipKinds: ["recorded_prerequisite"],
+      recordedPrerequisiteIds: ["TD-001"],
+    }),
+    routeStep("RM-002", {
+      rationale: "Extend the capability after core analytics.",
+      relationshipKinds: ["strategic_ordering"],
+    }),
+  ],
+} = {}) {
+  return {
+    name,
+    recommended,
+    intendedOutcome: "Deliver reliable investor analytics with an evidence-based progression.",
+    goalAlignment: "Advances the project goal of trustworthy MSTR/BTC decision support.",
+    goalEvidence: ["docs/architecture.md: Project Goal"],
+    strategyRationale: "Resolve a relevant prerequisite, then build and extend analytics.",
+    evidence: ["TD-001", "RM-001", "RM-002", "docs/architecture.md"],
+    tradeoffs: ["Delays a broader workspace redesign."],
+    assumptions: ["The current market-data boundary remains usable."],
+    risks: ["Data validation may reveal further issues."],
+    stoppingPoint: "Stop after the initial analytics slice before planning a new capability.",
+    confidence: {
+      level: "Medium",
+      rationale: "Task descriptions support the route, but do not define every acceptance criterion.",
+    },
+    externalPrerequisites: [],
+    unresolvedPrerequisites: [],
+    steps,
+  };
+}
+
+function validAnswer(recommendationId = "TD-001") {
   return JSON.stringify({
-    summary: "Validate data before extending analytics.",
+    summary: "Validate data, build analytics, then extend the investor capability.",
     recommendation: {
       taskId: recommendationId,
       whyNow: "It protects downstream calculations.",
       unlocks: "Reliable analytics work.",
       confidence: "High",
-      confidenceRationale: "A canonical dependency points to the data task.",
+      confidenceRationale: "The task is the first step of a supported multi-task route.",
     },
     noRecommendationReason: "",
     planningConfidence: {
@@ -145,7 +206,7 @@ function validAnswer(recommendationId = "RM-001") {
       rationale: "One dependency is recorded, but narrative coverage is incomplete.",
     },
     reasoning: {
-      whyRecommendation: "The data validation task is the best leverage point.\n\nIt protects future calculations from silently propagating bad inputs.",
+      whyRecommendation: "Data validation is the strongest starting point for the route.\n\nIt protects future calculations from silently propagating bad inputs.",
       whatItUnlocks: "It allows analytics work to build on validated market data and exposes data quality risks early.",
       prerequisites: ["TD-001 is the recorded prerequisite."],
       alternativesNotSelected: ["RM-002 is lower leverage now."],
@@ -162,54 +223,23 @@ function validAnswer(recommendationId = "RM-001") {
       suggestedFirstStep: "Review current data-quality checks and write down the acceptance criteria before implementation.",
       evidence: ["RM-001 depends on TD-001 in the canonical graph."],
     },
-    alternativePaths: [
-      {
-        label: "Workspace-first",
-        taskId: "RM-002",
-        approach: "Explore the workspace layout first.",
-        tradeoff: "This creates visible progress but leaves data-quality risk unresolved.",
-        confidence: "Low",
-      },
-      {
-        label: "Data-first",
-        taskId: "TD-001",
-        approach: "Start with the validation research task.",
-        tradeoff: "This reduces uncertainty but delays visible feature delivery.",
-        confidence: "Medium",
-      },
-    ],
-    implementationSequences: [
-      {
-        pathType: "recommended",
-        label: "Recommended Path",
-        steps: [{
-          taskId: "RM-001",
-          rationale: "It is the selected next task.",
-          benefit: "It validates the data boundary.",
-          unlocks: "Reliable analytics work.",
-          confidence: "High",
-        }],
-      },
-      {
-        pathType: "alternative",
-        label: "Data-first",
+    routeAssessment: {
+      status: "routes_identified",
+      explanation: "The task and goal context supports one coherent three-step route.",
+    },
+    deliveryRoutes: [
+      deliveryRoute(),
+      deliveryRoute({
+        name: "Lean data-to-workspace path",
+        recommended: false,
         steps: [
-          {
-            taskId: "TD-001",
-            rationale: "Resolve the recorded prerequisite first.",
-            benefit: "It reduces data uncertainty.",
-            unlocks: "The analytics task can proceed.",
-            confidence: "Medium",
-          },
-          {
-            taskId: "RM-001",
-            rationale: "Continue with the recommended analytics task.",
-            benefit: "The data validation can be applied.",
-            unlocks: "Reliable analytics work.",
-            confidence: "High",
-          },
+          routeStep("TD-001", { rationale: "Resolve the data concern first." }),
+          routeStep("RM-002", {
+            rationale: "Apply the result to the next workspace capability.",
+            relationshipKinds: ["practical_enablement", "strategic_ordering"],
+          }),
         ],
-      },
+      }),
     ],
     risks: [{ risk: "Validation may reveal more data issues.", mitigation: "Keep acceptance criteria and scope explicit." }],
   });
@@ -365,66 +395,145 @@ test("discloses missing explicit goals without promoting descriptions into goals
   }]);
 });
 
-test("preserves expanded reasoning, multiple paths, and suggested edges without changing canonical dependencies", () => {
+test("preserves expanded reasoning and multi-task routes without changing canonical dependencies", () => {
   const context = createContext();
   const plan = parsePlanningAnswer(validAnswer(), context);
 
-  assert.equal(plan.recommendation.taskId, "RM-001");
-  assert.equal(plan.recommendation.title, "Build analytics");
+  assert.equal(plan.recommendation.taskId, "TD-001");
+  assert.equal(plan.recommendation.title, "Validate market data");
   assert.equal(plan.planningConfidence.level, "Medium");
   assert.match(plan.reasoning.whyRecommendation, /silently propagating bad inputs/);
   assert.equal(plan.reasoning.suggestedFirstStep.startsWith("Review current"), true);
-  assert.equal(plan.alternativePaths.length, 2);
-  assert.equal(plan.alternativePath.taskId, "RM-002");
-  assert.equal(plan.implementationSequences[0].label, "Recommended Path");
-  assert.equal(plan.implementationSequences[0].steps[0].taskId, "RM-001");
-  assert.equal(plan.implementationSequences[0].steps[0].title, "Build analytics");
-  assert.equal(plan.implementationSequences[1].label, "Data-first");
-  assert.deepEqual(plan.implementationSequences[1].steps.map(({ taskId }) => taskId), ["TD-001", "RM-001"]);
-  assert.equal(plan.implementationSequences[1].steps[0].confidence, "Medium");
+  assert.equal(plan.routeAssessment.status, "routes_identified");
+  assert.equal(plan.deliveryRoutes.length, 2);
+  assert.equal(plan.deliveryRoutes[0].recommended, true);
+  assert.deepEqual(plan.deliveryRoutes[0].steps.map(({ taskId }) => taskId), ["TD-001", "RM-001", "RM-002"]);
+  assert.equal(plan.deliveryRoutes[0].steps[0].title, "Validate market data");
+  assert.deepEqual(plan.deliveryRoutes[0].steps[1].recordedPrerequisiteIds, ["TD-001"]);
+  assert.deepEqual(plan.deliveryRoutes[0].steps[1].relationshipKinds, ["recorded_prerequisite"]);
+  assert.deepEqual(plan.deliveryRoutes[1].steps.map(({ taskId }) => taskId), ["TD-001", "RM-002"]);
   assert.equal(plan.reasoning.suggestedDependencies[0].dependentTaskTitle, "Explore a future layout");
   assert.equal(plan.reasoning.suggestedDependencies[0].prerequisiteTaskTitle, "Build analytics");
   assert.equal(context.board.canonicalDependencies.length, 1);
   assert.deepEqual(context.board.canonicalDependencies, [{ prerequisiteId: "TD-001", dependentId: "RM-001" }]);
 });
 
-test("rejects implementation sequences that invent tasks or do not match supported paths", () => {
+test("rejects routes that invent tasks or conflict with their recommendation", () => {
   const context = createContext();
-  const missingSequenceAnswer = JSON.parse(validAnswer());
-  delete missingSequenceAnswer.implementationSequences;
+  const missingRouteAnswer = JSON.parse(validAnswer());
+  delete missingRouteAnswer.deliveryRoutes;
   assert.throws(
-    () => parsePlanningAnswer(JSON.stringify(missingSequenceAnswer), context),
+    () => parsePlanningAnswer(JSON.stringify(missingRouteAnswer), context),
     (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
   );
 
   const unknownTaskAnswer = JSON.parse(validAnswer());
-  unknownTaskAnswer.implementationSequences[0].steps[0].taskId = "RM-999";
+  unknownTaskAnswer.deliveryRoutes[0].steps[0].taskId = "RM-999";
   assert.throws(
     () => parsePlanningAnswer(JSON.stringify(unknownTaskAnswer), context),
     (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
   );
 
   const mismatchedStartAnswer = JSON.parse(validAnswer());
-  mismatchedStartAnswer.implementationSequences[0].steps[0].taskId = "RM-002";
+  mismatchedStartAnswer.deliveryRoutes[0].steps[0].taskId = "RM-002";
   assert.throws(
     () => parsePlanningAnswer(JSON.stringify(mismatchedStartAnswer), context),
     (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
   );
 
-  const unsupportedPathAnswer = JSON.parse(validAnswer());
-  unsupportedPathAnswer.implementationSequences[1].label = "Architecture-first";
+  const multipleRecommendedRoutesAnswer = JSON.parse(validAnswer());
+  multipleRecommendedRoutesAnswer.deliveryRoutes[1].recommended = true;
   assert.throws(
-    () => parsePlanningAnswer(JSON.stringify(unsupportedPathAnswer), context),
+    () => parsePlanningAnswer(JSON.stringify(multipleRecommendedRoutesAnswer), context),
     (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
   );
 
-  const repeatedTaskAnswer = JSON.parse(validAnswer());
-  repeatedTaskAnswer.implementationSequences[1].steps[1].taskId = "TD-001";
+  const reversedPrerequisiteAnswer = JSON.parse(validAnswer());
+  reversedPrerequisiteAnswer.deliveryRoutes[0].steps[1].taskId = "RM-002";
+  reversedPrerequisiteAnswer.deliveryRoutes[0].steps[2].taskId = "RM-001";
+  reversedPrerequisiteAnswer.deliveryRoutes[0].steps[2].relationshipKinds = ["strategic_ordering"];
+  reversedPrerequisiteAnswer.deliveryRoutes[0].steps[2].recordedPrerequisiteIds = ["TD-001"];
   assert.throws(
-    () => parsePlanningAnswer(JSON.stringify(repeatedTaskAnswer), context),
+    () => parsePlanningAnswer(JSON.stringify(reversedPrerequisiteAnswer), context),
     (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
   );
+
+  const shortRouteAnswer = JSON.parse(validAnswer());
+  shortRouteAnswer.routeAssessment.status = "limited_route";
+  shortRouteAnswer.deliveryRoutes[0].steps.pop();
+  shortRouteAnswer.deliveryRoutes[0].steps.pop();
+  assert.throws(
+    () => parsePlanningAnswer(JSON.stringify(shortRouteAnswer), context),
+    (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
+  );
+
+  const missingPrerequisiteAnswer = JSON.parse(validAnswer());
+  missingPrerequisiteAnswer.deliveryRoutes[0].steps[1].recordedPrerequisiteIds = [];
+  assert.throws(
+    () => parsePlanningAnswer(JSON.stringify(missingPrerequisiteAnswer), context),
+    (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
+  );
+
+  const duplicateTaskAnswer = JSON.parse(validAnswer());
+  duplicateTaskAnswer.deliveryRoutes[1].steps[1].taskId = "TD-001";
+  assert.throws(
+    () => parsePlanningAnswer(JSON.stringify(duplicateTaskAnswer), context),
+    (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
+  );
+
   assert.deepEqual(context.board.canonicalDependencies, [{ prerequisiteId: "TD-001", dependentId: "RM-001" }]);
+});
+
+test("supports an evidence-limited recommendation without inventing a delivery route", () => {
+  const answer = JSON.parse(validAnswer());
+  answer.routeAssessment = {
+    status: "insufficient_evidence",
+    explanation: "The context supports a next task but not a defensible multi-task route.",
+  };
+  answer.deliveryRoutes = [];
+
+  const plan = parsePlanningAnswer(JSON.stringify(answer), createContext());
+  assert.equal(plan.recommendation.taskId, "TD-001");
+  assert.equal(plan.routeAssessment.status, "insufficient_evidence");
+  assert.deepEqual(plan.deliveryRoutes, []);
+});
+
+test("requires unfinished recorded prerequisites outside a route to be disclosed", () => {
+  const context = createContext();
+  const answer = JSON.parse(validAnswer("RM-001"));
+  answer.routeAssessment = {
+    status: "limited_route",
+    explanation: "Only a short analytics progression is supported.",
+  };
+  answer.deliveryRoutes = [
+    deliveryRoute({
+      name: "Analytics-first",
+      steps: [
+        routeStep("RM-001", {
+          rationale: "Begin the selected analytics work while tracking its outstanding prerequisite.",
+          recordedPrerequisiteIds: ["TD-001"],
+        }),
+        routeStep("RM-002", {
+          rationale: "Continue with an adjacent capability after the analytics slice.",
+          relationshipKinds: ["strategic_ordering"],
+        }),
+      ],
+    }),
+  ];
+  answer.deliveryRoutes[0].externalPrerequisites = [{
+    taskId: "TD-001",
+    rationale: "The analytics task has a recorded data-validation prerequisite.",
+    condition: "Complete or explicitly resolve data validation before relying on analytics results.",
+  }];
+
+  const plan = parsePlanningAnswer(JSON.stringify(answer), context);
+  assert.equal(plan.deliveryRoutes[0].externalPrerequisites[0].taskId, "TD-001");
+
+  answer.deliveryRoutes[0].externalPrerequisites = [];
+  assert.throws(
+    () => parsePlanningAnswer(JSON.stringify(answer), context),
+    (error) => error instanceof PlanningError && error.code === "planning_response_invalid",
+  );
 });
 
 test("does not truncate long narrative fields or detailed lists", () => {
@@ -481,13 +590,16 @@ test("preserves malformed output and supports explicit no-recommendation respons
       suggestedFirstStep: "",
       evidence: [],
     },
-    alternativePaths: [],
-    implementationSequences: [],
+    routeAssessment: {
+      status: "insufficient_evidence",
+      explanation: "There is not enough task or goal evidence to support a delivery route.",
+    },
+    deliveryRoutes: [],
     risks: [],
   }), createContext());
   assert.equal(plan.recommendation, null);
   assert.equal(plan.planningConfidence.level, "Low");
-  assert.equal(plan.alternativePaths.length, 0);
+  assert.equal(plan.deliveryRoutes.length, 0);
 });
 
 test("builds a planning-only prompt that preserves analysis and separates dependency judgment", () => {
@@ -495,10 +607,10 @@ test("builds a planning-only prompt that preserves analysis and separates depend
   assert.match(prompt, /Do not create or modify tasks or dependencies/);
   assert.match(prompt, /Canonical dependencies are only board\.canonicalDependencies/);
   assert.match(prompt, /Do not compress, paraphrase away, or omit relevant analysis/);
-  assert.match(prompt, /alternativePaths/);
-  assert.match(prompt, /implementationSequences/);
-  assert.match(prompt, /sequence order is planning judgement only/);
-  assert.match(prompt, /does not create Depends On entries, graph edges, blockers, readiness, or workflow analytics/);
+  assert.match(prompt, /coherent delivery routes exist through the next phase/);
+  assert.match(prompt, /deliveryRoutes/);
+  assert.match(prompt, /strategic ordering are planning judgement only/);
+  assert.match(prompt, /do not create Depends On entries, graph edges, blockers, readiness, or workflow analytics/);
   assert.match(prompt, /suggestedDependencies/);
   assert.match(prompt, /goalSourcePriority order: root AGENTS\.md, root README\.md, docs\/roadmap\.md, then docs\/architecture\.md/);
   assert.match(prompt, /AGENTS\.md goals, success criteria, non-goals, planning guidance, and constraints/);

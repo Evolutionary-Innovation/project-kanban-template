@@ -10,6 +10,7 @@ The template's task state is maintained in the table below. See [architecture](a
 - Configured completion dates and per-source non-reusable ID sequences, persisted through the existing Markdown transaction; status transitions override supplied dates, preserve unknown historical blanks, and are covered across edit, move, and HTTP paths.
 - A secondary read-only dependency graph with shared filters, explicit dependency-neighbourhood focus/expansion, board linking, graph-launched editing through the existing editor, cycle/unresolved warnings, zoom controls and an accessible relationship list.
 - Derived workflow intelligence for dependency readiness, blocked work, unresolved/cycle diagnostics, unique downstream impact, and the longest unweighted dependency chain. No schema or execution automation was added.
+- A read-only, current-session next-work advisor with a versioned context export, root `AGENTS.md` guidance, deterministic goal-source precedence and provenance, validated recommendations, expanded reasoning, multiple alternatives, suggested implementation sequences, and separate recorded-versus-suggested dependency reporting. Sequence order is planning judgement and does not mutate tasks or graph state.
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->

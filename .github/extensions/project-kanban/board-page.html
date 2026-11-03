@@ -79,6 +79,87 @@
         <p id="dependency-suggestions-status" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="dependency-suggestions-list" class="dependency-suggestion-list"></div>
       </section>
+      <section class="planning-panel" aria-labelledby="planning-heading">
+        <div class="planning-panel-header">
+          <div>
+            <h2 id="planning-heading">Planning advisor</h2>
+            <p>Read-only next-work guidance from the current agent. Recommendations do not change the board.</p>
+          </div>
+          <button id="suggest-next-work" class="refresh-button" type="button">Suggest Next Work</button>
+        </div>
+        <p id="planning-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <details id="planning-context-details">
+          <summary>Read-only Planning Context export</summary>
+          <div class="planning-context-actions">
+            <button id="refresh-planning-context" class="secondary-button" type="button">Refresh context</button>
+            <button id="copy-planning-context" class="secondary-button" type="button">Copy JSON</button>
+            <button id="download-planning-context" class="secondary-button" type="button">Download JSON</button>
+          </div>
+          <p id="planning-context-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          <label class="planning-context-label" for="planning-context-json">Planning context JSON (read-only)</label>
+          <textarea id="planning-context-json" class="planning-context-json" rows="12" readonly></textarea>
+        </details>
+      </section>
+      <section id="planning-result" class="planning-result" aria-labelledby="planning-result-heading" hidden>
+        <h2 id="planning-result-heading">Next-work recommendation</h2>
+        <h3 id="planning-recommendation-title"></h3>
+        <p id="planning-summary"></p>
+        <p id="planning-why-now"></p>
+        <p id="planning-unlocks"></p>
+        <p id="planning-confidence"></p>
+        <section id="planning-paths" class="planning-subsection" aria-labelledby="planning-paths-heading">
+          <h3 id="planning-paths-heading">Implementation paths</h3>
+          <p class="planning-scope-warning">
+            Sequence order is planning judgement, not a dependency. Only entries in Recorded Dependencies are canonical;
+            order does not create Depends On entries, graph edges, blockers, readiness, or workflow analytics.
+          </p>
+          <div id="planning-path-list" class="planning-path-list"></div>
+        </section>
+        <section class="planning-subsection" aria-labelledby="planning-coverage-heading">
+          <h3 id="planning-coverage-heading">Planning confidence and coverage</h3>
+          <dl id="planning-coverage-summary" class="planning-coverage-summary"></dl>
+          <h4>Recorded Dependencies</h4>
+          <ul id="planning-recorded-dependencies"></ul>
+          <h4>Suggested Dependencies</h4>
+          <p class="planning-scope-warning">
+            Suggested relationships are planning judgement only. They are not recorded edges and do not affect blockers,
+            readiness, analytics, or downstream impact.
+          </p>
+          <ul id="planning-suggested-dependencies"></ul>
+          <h4>Goal Source</h4>
+          <ul id="planning-goal-sources"></ul>
+        </section>
+        <section class="planning-subsection" aria-labelledby="planning-risks-heading">
+          <h3 id="planning-risks-heading">Risks and safeguards</h3>
+          <ul id="planning-risks"></ul>
+        </section>
+        <details class="planning-reasoning">
+          <summary>Expanded analysis</summary>
+          <h3>Why this recommendation</h3>
+          <p id="planning-expanded-why"></p>
+          <h3>What it unlocks</h3>
+          <p id="planning-expanded-unlocks"></p>
+          <h3>Prerequisites</h3>
+          <ul id="planning-prerequisites"></ul>
+          <h3>Why alternatives were rejected</h3>
+          <ul id="planning-alternatives-not-selected"></ul>
+          <h3>Missing dependency observations</h3>
+          <ul id="planning-missing-dependencies"></ul>
+          <h3>Assumptions</h3>
+          <ul id="planning-assumptions"></ul>
+          <h3>Uncertainty</h3>
+          <ul id="planning-uncertainty"></ul>
+          <h3>Suggested first step</h3>
+          <p id="planning-first-step"></p>
+          <h3>Evidence</h3>
+          <ul id="planning-evidence"></ul>
+        </details>
+        <p id="planning-freshness" class="planning-freshness"></p>
+        <details id="planning-raw-response" class="planning-raw-response" hidden>
+          <summary>Raw agent response (not structured)</summary>
+          <pre id="planning-raw-response-text"></pre>
+        </details>
+      </section>
       <p id="ordering-hint" class="ordering-hint" hidden>
         Manual reorder is disabled while search or filters hide cards, or while a column uses a non-manual sort.
       </p>

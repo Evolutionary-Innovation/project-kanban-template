@@ -37,6 +37,14 @@ const dependencySuggestionsButton = document.querySelector("#review-dependency-s
 const dependencySuggestionsPanel = document.querySelector("#dependency-suggestions-panel");
 const dependencySuggestionsList = document.querySelector("#dependency-suggestions-list");
 const dependencySuggestionsStatus = document.querySelector("#dependency-suggestions-status");
+const suggestNextWorkButton = document.querySelector("#suggest-next-work");
+const planningStatus = document.querySelector("#planning-status");
+const planningContextDetails = document.querySelector("#planning-context-details");
+const planningContextJson = document.querySelector("#planning-context-json");
+const planningContextStatus = document.querySelector("#planning-context-status");
+const planningResult = document.querySelector("#planning-result");
+const planningRawResponse = document.querySelector("#planning-raw-response");
+const planningRawResponseText = document.querySelector("#planning-raw-response-text");
 let activeView = "kanban";
 let graphController = null;
 let graphModuleAttempt = 0;
@@ -1148,6 +1156,334 @@ async function refreshBoard() {
     refreshButton.disabled = false;
   }
 }
+
+function currentPlanningView() {
+  const filters = Object.fromEntries(
+    ["source", "status", "priority", "category", "area", "dependency"]
+      .map((key) => [key, viewState[key]])
+      .filter(([, values]) => values.length > 0),
+  );
+  return {
+    activeView,
+    searchActive: Boolean(viewState.search),
+    filters,
+    revealedTaskId: viewState.revealedTaskId ?? null,
+  };
+}
+
+async function loadPlanningContext() {
+  planningContextJson.value = "";
+  planningContextStatus.textContent = "Reading current board and project context…";
+  try {
+    const response = await fetch("/api/planning-context", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof payload.error === "string" ? payload.error : "Planning context could not be loaded.");
+    }
+    const context = { ...payload, currentView: currentPlanningView() };
+    planningContextJson.value = JSON.stringify(context, null, 2);
+    planningContextStatus.textContent =
+      `Context refreshed ${new Date(context.generatedAt).toLocaleString()}. It includes all tasks; current filters are metadata only.`;
+    return context;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown planning context error.";
+    planningContextStatus.textContent = `Unable to load planning context: ${message}`;
+    return null;
+  }
+}
+
+function renderPlanningList(element, items, emptyMessage) {
+  element.replaceChildren();
+  if (items.length === 0) {
+    const empty = document.createElement("li");
+    empty.textContent = emptyMessage;
+    element.append(empty);
+    return;
+  }
+  for (const item of items) {
+    const entry = document.createElement("li");
+    entry.textContent = item;
+    element.append(entry);
+  }
+}
+
+function renderPlanningPaths(plan) {
+  const list = document.querySelector("#planning-path-list");
+  list.replaceChildren();
+  if (!plan.recommendation && plan.alternativePaths.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No defensible implementation paths were identified.";
+    list.append(empty);
+    return;
+  }
+
+  const paths = [
+    ...(plan.recommendation ? [{
+      label: "Recommended path",
+      taskId: plan.recommendation.taskId,
+      title: plan.recommendation.title,
+      approach: plan.recommendation.whyNow,
+      tradeoff: plan.recommendation.unlocks,
+      confidence: plan.recommendation.confidence,
+      recommended: true,
+      sequence: plan.implementationSequences.find(({ pathType }) => pathType === "recommended"),
+    }] : []),
+    ...plan.alternativePaths.map((path) => ({
+      ...path,
+      recommended: false,
+      sequence: plan.implementationSequences.find((sequence) =>
+        sequence.pathType === "alternative" &&
+        sequence.label === path.label &&
+        sequence.steps[0]?.taskId === path.taskId
+      ),
+    })),
+  ];
+
+  for (const path of paths) {
+    const card = document.createElement("article");
+    card.className = "planning-path";
+    card.dataset.recommended = String(path.recommended);
+    const heading = document.createElement("h4");
+    heading.textContent = `${path.label}: ${path.taskId}: ${path.title}`;
+    const approach = document.createElement("p");
+    approach.textContent = `Approach: ${path.approach}`;
+    const tradeoff = document.createElement("p");
+    tradeoff.textContent = `Trade-off: ${path.tradeoff}`;
+    const confidenceLabel = document.createElement("p");
+    confidenceLabel.textContent = `Confidence: ${path.confidence}`;
+    card.append(heading, approach, tradeoff, confidenceLabel);
+
+    const sequenceHeading = document.createElement("h5");
+    sequenceHeading.className = "planning-path-sequence-heading";
+    sequenceHeading.textContent = "Suggested implementation sequence";
+    const sequenceList = document.createElement("ol");
+    sequenceList.className = "planning-path-sequence";
+    if (path.sequence) {
+      for (const step of path.sequence.steps) {
+        const item = document.createElement("li");
+        const task = document.createElement("p");
+        task.className = "planning-sequence-step-title";
+        task.textContent = `${step.taskId}: ${step.title}`;
+
+        const rationale = document.createElement("p");
+        rationale.textContent = `Rationale: ${step.rationale}`;
+        const benefit = document.createElement("p");
+        benefit.textContent = `Expected benefit: ${step.benefit}`;
+        const unlocks = document.createElement("p");
+        unlocks.textContent = `What it unlocks: ${step.unlocks}`;
+        const confidenceLabel = document.createElement("p");
+        confidenceLabel.textContent = `Confidence: ${step.confidence}`;
+
+        item.append(task, rationale, benefit, unlocks, confidenceLabel);
+        sequenceList.append(item);
+      }
+    } else {
+      const item = document.createElement("li");
+      item.textContent = "No defensible sequence was identified for this path.";
+      sequenceList.append(item);
+    }
+
+    card.append(sequenceHeading, sequenceList);
+    list.append(card);
+  }
+}
+
+function renderPlanningCoverage(payload, plan) {
+  const coverage = payload.coverage;
+  const summary = document.querySelector("#planning-coverage-summary");
+  summary.replaceChildren();
+  const entries = [
+    ["Planning confidence", `${plan.planningConfidence.level} — ${plan.planningConfidence.rationale}`],
+    [
+      "Dependency coverage",
+      `${coverage.canonicalDependencyCount} recorded edges across ${coverage.tasksWithRecordedDependencies} of ` +
+        `${coverage.totalTaskCount} tasks; this is a record count, not a completeness measure.`,
+    ],
+  ];
+  for (const [label, value] of entries) {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    summary.append(term, description);
+  }
+
+  const recordedDependencies = coverage.recordedDependencies.map(({ prerequisiteId, prerequisiteTitle, dependentId }) =>
+    `${dependentId} depends on ${prerequisiteId}${prerequisiteTitle ? ` (${prerequisiteTitle})` : " (unresolved)"}`,
+  );
+  renderPlanningList(
+    document.querySelector("#planning-recorded-dependencies"),
+    recordedDependencies,
+    "No Depends On edges are recorded. This does not establish that no prerequisite exists.",
+  );
+
+  const suggestedDependencies = plan.reasoning.suggestedDependencies.map((suggestion) =>
+    `${suggestion.dependentTaskId}: ${suggestion.dependentTaskTitle} may depend on ` +
+      `${suggestion.prerequisiteTaskId}: ${suggestion.prerequisiteTaskTitle} ` +
+      `(agent confidence: ${suggestion.confidence}). Evidence: ${suggestion.evidence} ` +
+      `Rationale: ${suggestion.rationale}`,
+  );
+  renderPlanningList(
+    document.querySelector("#planning-suggested-dependencies"),
+    suggestedDependencies,
+    "No suggested dependency relationships were reported.",
+  );
+
+  const goalSources = coverage.explicitGoals.map(({ source, line, text }) => `${source}:${line} — ${text}`);
+  renderPlanningList(
+    document.querySelector("#planning-goal-sources"),
+    goalSources,
+    "No explicit project goal was extracted from the included project documents. A goal supplied in the conversation is separate evidence.",
+  );
+}
+
+function renderPlanningResult(payload) {
+  const { plan } = payload;
+  planningResult.hidden = false;
+  planningRawResponse.hidden = true;
+  if (plan.recommendation) {
+    document.querySelector("#planning-recommendation-title").textContent =
+      `${plan.recommendation.taskId}: ${plan.recommendation.title}`;
+    document.querySelector("#planning-why-now").textContent = `Why now: ${plan.recommendation.whyNow}`;
+    document.querySelector("#planning-unlocks").textContent = `What it unlocks: ${plan.recommendation.unlocks}`;
+  } else {
+    document.querySelector("#planning-recommendation-title").textContent = "No recommendation";
+    document.querySelector("#planning-why-now").textContent = plan.noRecommendationReason;
+    document.querySelector("#planning-unlocks").textContent = "";
+  }
+  document.querySelector("#planning-summary").textContent = plan.summary;
+  document.querySelector("#planning-confidence").textContent =
+    `Planning confidence: ${plan.planningConfidence.level} — ${plan.planningConfidence.rationale}`;
+
+  renderPlanningPaths(plan);
+  renderPlanningCoverage(payload, plan);
+
+  const riskList = document.querySelector("#planning-risks");
+  renderPlanningList(
+    riskList,
+    plan.risks.map(({ risk, mitigation }) => `${risk} Mitigation: ${mitigation}`),
+    "No specific risks were identified; verify the recommendation against current project context.",
+  );
+
+  document.querySelector("#planning-expanded-why").textContent =
+    plan.reasoning.whyRecommendation || "Expanded recommendation reasoning was not supplied.";
+  document.querySelector("#planning-expanded-unlocks").textContent =
+    plan.reasoning.whatItUnlocks || "Expanded unlock analysis was not supplied.";
+  document.querySelector("#planning-first-step").textContent =
+    plan.reasoning.suggestedFirstStep || "No first step was supplied.";
+  renderPlanningList(
+    document.querySelector("#planning-prerequisites"),
+    plan.reasoning.prerequisites,
+    "No prerequisites identified.",
+  );
+  renderPlanningList(
+    document.querySelector("#planning-alternatives-not-selected"),
+    plan.reasoning.alternativesNotSelected,
+    "No alternatives were discussed.",
+  );
+  renderPlanningList(
+    document.querySelector("#planning-missing-dependencies"),
+    plan.reasoning.missingDependencyObservations,
+    "No narrative dependency observations were reported.",
+  );
+  renderPlanningList(
+    document.querySelector("#planning-assumptions"),
+    plan.reasoning.assumptions,
+    "No material assumptions were reported.",
+  );
+  renderPlanningList(
+    document.querySelector("#planning-uncertainty"),
+    plan.reasoning.uncertainty,
+    "No uncertainty was reported.",
+  );
+  renderPlanningList(
+    document.querySelector("#planning-evidence"),
+    plan.reasoning.evidence,
+    "No evidence was supplied.",
+  );
+
+  const formatTime = (value) => value ? new Date(value).toLocaleString() : "unavailable";
+  document.querySelector("#planning-freshness").textContent =
+    `Context generated ${formatTime(payload.contextGeneratedAt)} from board snapshot ` +
+    `${formatTime(payload.boardSnapshotAt)}. This advice is not persisted and does not change board state.`;
+}
+
+async function suggestNextWork() {
+  suggestNextWorkButton.disabled = true;
+  suggestNextWorkButton.setAttribute("aria-busy", "true");
+  planningStatus.textContent = "Asking the current agent for read-only planning advice…";
+  planningResult.hidden = true;
+  planningRawResponse.hidden = true;
+  try {
+    const response = await fetch("/api/planning/suggest", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ currentView: currentPlanningView() }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      if (typeof payload.rawAnswer === "string") {
+        planningRawResponseText.textContent = payload.rawAnswer;
+        planningRawResponse.hidden = false;
+      }
+      throw new Error(typeof payload.error === "string" ? payload.error : "Planning request failed.");
+    }
+    renderPlanningResult(payload);
+    planningStatus.textContent = "Planning advice received. Review the evidence and verify it against current project state.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown planning request error.";
+    planningStatus.textContent = `Unable to obtain planning advice: ${message}`;
+  } finally {
+    suggestNextWorkButton.disabled = false;
+    suggestNextWorkButton.removeAttribute("aria-busy");
+  }
+}
+
+async function copyPlanningContext() {
+  try {
+    const context = await loadPlanningContext();
+    if (!context) return;
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable in this browser.");
+    await navigator.clipboard.writeText(JSON.stringify(context, null, 2));
+    planningContextStatus.textContent = "Fresh planning context copied as JSON.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown clipboard error.";
+    planningContextStatus.textContent = `Unable to copy planning context: ${message}`;
+  }
+}
+
+async function downloadPlanningContext() {
+  try {
+    const context = await loadPlanningContext();
+    if (!context) return;
+    const file = new Blob([JSON.stringify(context, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    const projectName = boardSnapshot?.config.projectName ?? "project";
+    link.href = url;
+    link.download = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-planning-context.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    planningContextStatus.textContent = "Fresh planning context downloaded as JSON.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown download error.";
+    planningContextStatus.textContent = `Unable to download planning context: ${message}`;
+  }
+}
+
+document.querySelector("#refresh-planning-context").addEventListener("click", () => void loadPlanningContext());
+document.querySelector("#copy-planning-context").addEventListener("click", () => void copyPlanningContext());
+document.querySelector("#download-planning-context").addEventListener("click", () => void downloadPlanningContext());
+planningContextDetails.addEventListener("toggle", () => {
+  if (planningContextDetails.open) void loadPlanningContext();
+});
+suggestNextWorkButton.addEventListener("click", () => void suggestNextWork());
 
 taskSearchInput.addEventListener("input", () => {
   viewState.search = taskSearchInput.value.trim();

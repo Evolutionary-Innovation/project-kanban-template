@@ -11,6 +11,7 @@ A GitHub repository template for a Markdown-backed project-management canvas. Co
 - Scannable cards with `ID: Title` titles, lifecycle metadata, and separately labeled Details/configured fields.
 - Cross-source `Depends On` links with derived blocker state, cycle validation, dependency-aware search/filters, and graph-ready data.
 - A secondary dependency graph with shared filters, focus/expansion, cross-view navigation, unresolved/cycle warnings, derived dependency readiness, downstream impact, and the longest unweighted dependency chain.
+- A read-only next-work advisor that prioritizes explicit goals from root `AGENTS.md`, `README.md`, roadmap, then architecture, and includes relevant root agent guidance.
 - Configured `Execution Type` choices as passive metadata; the board does not launch agents or trigger work from status changes.
 - Markdown as the only task source of truth.
 - Revision checks, exclusive write locking, atomic file replacement, file-mode preservation, validation, and HTTP 409 conflict handling.

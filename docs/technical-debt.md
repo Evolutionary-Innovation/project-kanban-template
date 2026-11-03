@@ -4,6 +4,10 @@ Record known limitations, their impact, and the preferred remediation. Priority 
 
 ## Register
 
+### Transient planning query support
+
+The read-only next-work advisor depends on the experimental Copilot SDK `ui.ephemeralQuery` API. Unsupported hosts and invalid responses are reported explicitly, with no mutation-capable fallback. Recommendation confidence is agent-reported and uncalibrated. Verify stable host support and evaluate recommendation quality before expanding the proof of concept.
+
 ### Deep dependency graph layouts
 
 The secondary graph's pinned Dagre layout runs in a worker so layout does not block Kanban. Chromium verification covered the 60-task fixture and 250-task graphs (744 chain edges and 690 wide-rank edges). A synthetic 1,000-task/2,994-edge deep chain exceeds Dagre's browser call-stack limit. This is a topology-dependent limitation, not a supported fixed task-count ceiling.

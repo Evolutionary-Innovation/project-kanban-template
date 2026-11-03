@@ -4,6 +4,14 @@ import { CanvasError, createCanvas, joinSession } from "@github/copilot-sdk/exte
 import { readBoardConfig } from "./board-config.mjs";
 import { createBoardRequestHandler } from "./board-server.mjs";
 import {
+  buildNextWorkPrompt,
+  buildPlanningContext,
+  buildPlanningCoverage,
+  parsePlanningAnswer,
+  PlanningError,
+  readPlanningDocuments,
+} from "./planning-context.mjs";
+import {
   BoardStorageError,
   createTaskInDocuments,
   deleteTaskInDocuments,
@@ -39,6 +47,34 @@ async function runStorageOperation(operation) {
     if (error instanceof BoardStorageError) throw new CanvasError(error.code, error.message);
     throw error;
   }
+}
+
+async function getPlanningContext(currentView) {
+  const [board, documents] = await Promise.all([
+    loadBoard(),
+    readPlanningDocuments(workspaceRoot),
+  ]);
+  return buildPlanningContext({ board, documents, currentView });
+}
+
+async function requestNextWork(currentView) {
+  const context = await getPlanningContext(currentView);
+  const ui = copilotSession.rpc?.ui;
+  if (typeof ui?.ephemeralQuery !== "function") {
+    throw new PlanningError(
+      "planning_unavailable",
+      "The current Copilot host does not support transient planning queries.",
+    );
+  }
+
+  const result = await ui.ephemeralQuery({ question: buildNextWorkPrompt(context) });
+  const plan = parsePlanningAnswer(result?.answer, context);
+  return {
+    contextGeneratedAt: context.generatedAt,
+    boardSnapshotAt: context.boardSnapshotAt,
+    coverage: buildPlanningCoverage(context),
+    plan,
+  };
 }
 
 const moveTask = (input) =>
@@ -236,7 +272,15 @@ const kanbanCanvas = createCanvas({
     let record = serverByInstance.get(key);
 
     if (!record || !record.server.listening) {
-      const handler = await createBoardRequestHandler({ loadBoard, moveTask, createTask, editTask, deleteTask });
+      const handler = await createBoardRequestHandler({
+        loadBoard,
+        moveTask,
+        createTask,
+        editTask,
+        deleteTask,
+        getPlanningContext: () => getPlanningContext(),
+        requestNextWork,
+      });
       const server = createServer(handler);
       try {
         await listen(server);

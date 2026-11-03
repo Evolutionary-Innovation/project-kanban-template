@@ -26,6 +26,14 @@ The board footer and graph inspector show derived workflow intelligence: depende
 
 The board also provides a review panel for deterministic dependency suggestions found in configured narrative fields. Suggestions use exact task IDs paired with explicit relationship phrases and remain outside canonical graph calculations until approved. Approval uses the existing cycle-checked `Depends On` edit; dismissals are saved in the current browser only.
 
+## Planning advisor
+
+The read-only **Suggest Next Work** panel asks the current Copilot session for advice from a fresh snapshot of all tasks, canonical dependencies, workflow state, and project documents. Root `AGENTS.md` is included when available, with explicit-goal precedence over root `README.md`, `docs/roadmap.md`, then `docs/architecture.md`; architecture remains descriptive unless it explicitly states a goal. Explicit goals include their source and line, while descriptions are not promoted to goals. The current view is metadata and does not filter the planning task set. The context can be refreshed, copied, or downloaded as JSON.
+
+The result keeps a concise recommendation visible and provides expanded reasoning, assumptions, uncertainty, a suggested first step, evidence, risks, confidence, and every distinct alternative path returned. Each responsive implementation-path card contains its own suggested sequence, with task-by-task rationale, expected benefit, unlocks, and confidence. Cards flow into side-by-side columns when space permits and stack on narrow screens. Sequence order is planning judgement, not a dependency: it does not create `Depends On` entries or affect graph edges, blockers, readiness, or workflow analytics. Recorded dependencies remain shown separately.
+
+Planning does not create or edit tasks/dependencies, execute work, plan milestones, select agents, or persist the response. The current-session request uses an experimental no-tools SDK query; unsupported hosts and invalid responses produce visible errors rather than falling back to another workflow.
+
 Refresh from Markdown and subsequent successful task mutations update the same snapshot used by both views. The graph preserves selection when possible and caches topology-based layout. Layout runs in a same-origin module worker, terminated on completion, view exit, replacement, or error. Failed graph loads show Retry/Return to Kanban and never create a second mutation path. Failed Markdown refresh clears the graph rather than presenting stale data.
 
 The [pinned Dagre bundle and licence inventory](vendor/README.md) is served locally only when graph layout is needed. No consumer build step, CDN, or framework is required. Graph routes are allowlisted; CSP adds only `worker-src 'self'`.

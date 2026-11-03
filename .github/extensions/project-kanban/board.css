@@ -118,6 +118,244 @@
   color: #8a641c;
 }
 
+.planning-panel,
+.planning-result {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid #d3e1e3;
+  border-radius: 12px;
+  background: #f7faf9;
+}
+
+.planning-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.planning-panel h2,
+.planning-result h2,
+.planning-result h3 {
+  margin: 0 0 8px;
+}
+
+.planning-panel-header p,
+.planning-panel > p,
+.planning-context-actions + p,
+.planning-result > p,
+.planning-subsection p,
+.planning-reasoning,
+.planning-freshness {
+  color: #536b76;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.planning-panel details,
+.planning-reasoning {
+  margin-top: 12px;
+}
+
+.planning-panel summary,
+.planning-reasoning summary,
+.planning-raw-response summary {
+  color: #294c5c;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.planning-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.planning-context-label {
+  display: block;
+  margin: 8px 0 5px;
+  color: #536b76;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.planning-context-json {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 180px;
+  padding: 10px;
+  resize: vertical;
+  border: 1px solid #d3e1e3;
+  border-radius: 8px;
+  background: #fff;
+  color: #294c5c;
+  font: 0.74rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.planning-result {
+  background: #fff;
+}
+
+.planning-result > h3 {
+  color: #246866;
+  overflow-wrap: anywhere;
+}
+
+.planning-subsection {
+  margin: 14px 0;
+  padding-top: 12px;
+  border-top: 1px solid #dce6e6;
+}
+
+.planning-subsection h3,
+.planning-reasoning h3 {
+  margin: 10px 0 6px;
+  color: #294c5c;
+  font-size: 0.88rem;
+}
+
+.planning-subsection h4 {
+  margin: 12px 0 5px;
+  color: #294c5c;
+  font-size: 0.78rem;
+}
+
+.planning-path-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 10px;
+}
+
+.planning-path {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d3e1e3;
+  border-radius: 10px;
+  background: #f7faf9;
+}
+
+.planning-path h4 {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+
+.planning-path p {
+  margin: 7px 0;
+  color: #536b76;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.planning-path[data-recommended="true"] {
+  border-color: #83b4b1;
+  background: #f3fbf9;
+}
+
+.planning-path-sequence-heading {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #dce6e6;
+  color: #294c5c;
+  font-size: 0.78rem;
+}
+
+.planning-path-sequence {
+  margin: 0;
+  padding-left: 26px;
+  color: #536b76;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  list-style-position: outside;
+}
+
+.planning-path-sequence li {
+  margin: 10px 0;
+  padding-left: 4px;
+  overflow-wrap: anywhere;
+}
+
+.planning-path-sequence li:first-child {
+  margin-top: 0;
+}
+
+.planning-path-sequence li:last-child {
+  margin-bottom: 0;
+}
+
+.planning-path-sequence li p {
+  margin: 3px 0;
+}
+
+.planning-sequence-step-title {
+  color: #294c5c;
+  font-weight: 750;
+}
+
+.planning-coverage-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 14px;
+  margin: 10px 0;
+}
+
+.planning-coverage-summary dt {
+  color: #536b76;
+  font-size: 0.72rem;
+}
+
+.planning-coverage-summary dd {
+  margin: 2px 0 0;
+  color: #294c5c;
+  font-size: 0.84rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.planning-result ul {
+  padding-left: 22px;
+  color: #536b76;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.planning-result li {
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+
+.planning-scope-warning {
+  padding: 8px 10px;
+  border-left: 3px solid #b88e3b;
+  background: #fffaf0;
+}
+
+.planning-freshness {
+  margin-bottom: 0;
+  font-size: 0.72rem;
+}
+
+.planning-raw-response {
+  margin-top: 12px;
+}
+
+.planning-raw-response pre {
+  max-height: 360px;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f3f6f7;
+  color: #294c5c;
+  font: 0.74rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -1366,6 +1604,10 @@ h1 span {
 }
 
 @media (max-width: 860px) {
+  .planning-panel-header {
+    flex-direction: column;
+  }
+
   .graph-workspace {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -82,6 +82,80 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
   });
 });
 
+test("serves read-only planning routes without invoking task mutations", async (context) => {
+  let taskMutationCalls = 0;
+  let requestedView;
+  const handler = await createBoardRequestHandler({
+    loadBoard: async () => ({ tasks: [] }),
+    moveTask: async () => { taskMutationCalls += 1; },
+    createTask: async () => { taskMutationCalls += 1; },
+    editTask: async () => { taskMutationCalls += 1; },
+    deleteTask: async () => { taskMutationCalls += 1; },
+    getPlanningContext: async () => ({ schemaVersion: 1, board: { totalTaskCount: 0 } }),
+    requestNextWork: async (currentView) => {
+      requestedView = currentView;
+      return {
+        contextGeneratedAt: "2026-11-03T12:00:00.000Z",
+        boardSnapshotAt: "2026-11-03T11:59:00.000Z",
+        coverage: { canonicalDependencyCount: 0 },
+        plan: { summary: "Review the data-quality work first." },
+      };
+    },
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections?.();
+  }));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const origin = `http://127.0.0.1:${address.port}`;
+
+  const contextResponse = await fetch(`${origin}/api/planning-context`);
+  assert.equal(contextResponse.status, 200);
+  assert.deepEqual(await contextResponse.json(), {
+    schemaVersion: 1,
+    board: { totalTaskCount: 0 },
+  });
+
+  const currentView = {
+    activeView: "kanban",
+    searchActive: false,
+    filters: {},
+    revealedTaskId: null,
+  };
+  const suggestionResponse = await fetch(`${origin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ currentView }),
+  });
+  assert.equal(suggestionResponse.status, 200);
+  assert.deepEqual(await suggestionResponse.json(), {
+    contextGeneratedAt: "2026-11-03T12:00:00.000Z",
+    boardSnapshotAt: "2026-11-03T11:59:00.000Z",
+    coverage: { canonicalDependencyCount: 0 },
+    plan: { summary: "Review the data-quality work first." },
+  });
+  assert.deepEqual(requestedView, currentView);
+
+  const extraInput = await fetch(`${origin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ currentView, tasks: [] }),
+  });
+  assert.equal(extraInput.status, 400);
+  assert.equal((await extraInput.json()).code, "planning_context_invalid");
+
+  const crossOrigin = await fetch(`${origin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: "https://example.invalid", "Content-Type": "application/json" },
+    body: JSON.stringify({ currentView }),
+  });
+  assert.equal(crossOrigin.status, 403);
+  assert.equal(taskMutationCalls, 0);
+});
+
 test("applies completion lifecycle through edit and move API routes", async (context) => {
   const { root, config } = await createWorkspace(context);
   let board = await readBoardSnapshot(root, config);

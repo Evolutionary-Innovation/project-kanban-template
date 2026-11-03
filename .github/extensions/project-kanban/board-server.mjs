@@ -24,7 +24,13 @@ function statusFor(error) {
   if (error?.code === "board_input_invalid" || error?.code === "board_dependency_cycle") return 400;
   if (error?.code === "board_revision_conflict" || error?.code === "board_write_busy") return 409;
   if (error?.code === "board_task_not_found") return 404;
+  if (error?.code === "planning_context_invalid" || error?.code === "planning_response_invalid") return 400;
+  if (error?.code === "planning_unavailable") return 503;
   return 500;
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function readJsonBody(request) {
@@ -71,7 +77,15 @@ async function readAssets() {
   return assets;
 }
 
-export async function createBoardRequestHandler({ loadBoard, moveTask, createTask, editTask, deleteTask }) {
+export async function createBoardRequestHandler({
+  loadBoard,
+  moveTask,
+  createTask,
+  editTask,
+  deleteTask,
+  getPlanningContext,
+  requestNextWork,
+}) {
   if ([loadBoard, moveTask, createTask, editTask, deleteTask].some((handler) => typeof handler !== "function")) {
     throw new TypeError("Markdown load and task mutation handlers are required.");
   }
@@ -128,6 +142,42 @@ export async function createBoardRequestHandler({ loadBoard, moveTask, createTas
       return;
     }
 
+    if (pathname === "/api/planning/suggest") {
+      if (request.method !== "POST") {
+        response.setHeader("Allow", "POST");
+        sendJson(response, 405, { error: "Next-work suggestions require a POST request." });
+        return;
+      }
+      const expectedOrigin = `http://${request.headers.host}`;
+      if (request.headers.origin !== expectedOrigin) {
+        sendJson(response, 403, { error: "Planning requests must originate from this board." });
+        return;
+      }
+      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
+        sendJson(response, 415, { error: "Planning requests require an application/json body." });
+        return;
+      }
+      if (typeof requestNextWork !== "function") {
+        sendJson(response, 503, { error: "The current-agent planning query is unavailable in this extension session." });
+        return;
+      }
+      try {
+        const input = await readJsonBody(request);
+        if (!isRecord(input) || Object.keys(input).some((key) => key !== "currentView")) {
+          throw Object.assign(new Error("Planning requests may include only current board-view metadata."), {
+            code: "planning_context_invalid",
+          });
+        }
+        sendJson(response, 200, await requestNextWork(input.currentView));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown planning request error.";
+        const body = { error: message, code: error?.code ?? "planning_request_failed" };
+        if (typeof error?.rawAnswer === "string") body.rawAnswer = error.rawAnswer;
+        sendJson(response, statusFor(error), body);
+      }
+      return;
+    }
+
     if (request.method !== "GET") {
       response.setHeader("Allow", "GET");
       sendJson(response, 405, { error: "Only GET requests are supported." });
@@ -140,6 +190,20 @@ export async function createBoardRequestHandler({ loadBoard, moveTask, createTas
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown board loading error.";
         sendJson(response, 500, { error: message });
+      }
+      return;
+    }
+
+    if (pathname === "/api/planning-context") {
+      if (typeof getPlanningContext !== "function") {
+        sendJson(response, 503, { error: "Planning context is unavailable in this extension session." });
+        return;
+      }
+      try {
+        sendJson(response, 200, await getPlanningContext());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown planning context error.";
+        sendJson(response, statusFor(error), { error: message, code: error?.code ?? "planning_context_failed" });
       }
       return;
     }

@@ -8,6 +8,13 @@ import {
 
 const svgNamespace = "http://www.w3.org/2000/svg";
 
+export function invokeGraphTaskEdit(snapshot, taskId, onEditTask) {
+  const task = snapshot?.tasks?.find(({ id }) => id === taskId);
+  if (!task || typeof onEditTask !== "function") return false;
+  onEditTask(task);
+  return true;
+}
+
 function svgElement(name, attributes = {}, text = "") {
   const element = document.createElementNS(svgNamespace, name);
   for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
@@ -202,7 +209,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     contextMenuInvoker = invoker?.isConnected ? invoker : nodeElements.get(taskId);
     const sourceTask = latestSnapshot?.tasks.find((task) => task.id === taskId);
     addContextMenuAction("Edit Task", () => {
-      if (sourceTask) onEditTask?.(sourceTask);
+      invokeGraphTaskEdit(latestSnapshot, taskId, onEditTask);
     }, { disabled: !sourceTask, restoreFocus: false });
     addContextMenuAction("Show On Board", () => {
       if (sourceTask) onShowOnBoard?.(taskId);
@@ -277,7 +284,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       const actions = document.createElement("div");
       actions.className = "graph-inspector-actions";
       actions.append(
-        actionButton("Edit task", "edit", () => onEditTask?.(sourceTask)),
+        actionButton("Edit task", "edit", () => invokeGraphTaskEdit(latestSnapshot, node.id, onEditTask)),
         actionButton("Show on board", "board", () => onShowOnBoard?.(node.id)),
       );
       if (scope.focusId) {
@@ -666,8 +673,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
           focusNeighborhood(node.id);
           return;
         }
-        const task = latestSnapshot?.tasks.find(({ id }) => id === node.id);
-        if (task) onEditTask?.(task);
+        invokeGraphTaskEdit(latestSnapshot, node.id, onEditTask);
       });
       group.addEventListener("focus", () => {
         focusedId = node.id;

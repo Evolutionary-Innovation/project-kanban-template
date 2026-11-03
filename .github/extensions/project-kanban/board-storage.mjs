@@ -343,15 +343,33 @@ function currentDateOnly() {
   return `${year}-${month}-${day}`;
 }
 
-function completionDateFor(task, status, source, config) {
-  if (
-    status !== config.completionStatus ||
-    task.status === status ||
-    !source.extraFields.some(({ key, type }) => key === "completionDate" && type === "date")
-  ) {
-    return null;
+function lifecycleUpdatesFor(task, updates, source, config) {
+  const status = updates.status;
+  if (status === undefined || status === task.status || config.completionStatus === undefined) {
+    return updates;
   }
-  return currentDateOnly();
+
+  const hasCompletionDate = source.extraFields.some(
+    ({ key, type }) => key === "completionDate" && type === "date",
+  );
+  if (status === config.completionStatus) {
+    if (!hasCompletionDate) {
+      throw new BoardStorageError(
+        "board_input_invalid",
+        `Completion Date is not configured for ${task.id}; the task cannot enter ${config.completionStatus}.`,
+      );
+    }
+    const completionDate = currentDateOnly();
+    if (!completionDate) {
+      throw new BoardStorageError("board_input_invalid", "Completion Date is required for a completion transition.");
+    }
+    return { ...updates, completionDate };
+  }
+
+  if (task.status === config.completionStatus && hasCompletionDate) {
+    return { ...updates, completionDate: task.completionDate ?? "" };
+  }
+  return updates;
 }
 
 function validateDependencyChanges(task, updates, board, config) {
@@ -387,9 +405,12 @@ export async function moveTaskInDocuments(workspaceRoot, config, input) {
   return withLockedDocuments(workspaceRoot, config, input.revisions, (documents, board) => {
     const { task, source } = findTask(board, input.taskId, config);
     const markdown = canonicalMarkdown(documents, board, source, config);
-    const completionDate = completionDateFor(task, input.status, source, config);
-    const updates = { status: input.status, order: input.order };
-    if (completionDate) updates.completionDate = completionDate;
+    const updates = lifecycleUpdatesFor(
+      task,
+      { status: input.status, order: input.order },
+      source,
+      config,
+    );
     try {
       return {
         source,
@@ -463,12 +484,7 @@ export async function editTaskInDocuments(workspaceRoot, config, input) {
     }
     validateDependencyChanges(task, input.updates, board, config);
     const markdown = canonicalMarkdown(documents, board, source, config);
-    const completionDate = input.updates.completionDate === undefined
-      ? completionDateFor(task, input.updates.status, source, config)
-      : null;
-    const updates = completionDate
-      ? { ...input.updates, completionDate }
-      : input.updates;
+    const updates = lifecycleUpdatesFor(task, input.updates, source, config);
     try {
       return {
         source,

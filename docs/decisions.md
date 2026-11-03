@@ -82,3 +82,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Keep single-value selects, use native multi-select boxes, or persist named filter presets.
 - **Decision:** Use checkbox menus for source, status, priority, category, area, and dependency state. Values within a filter group use OR; different groups and search use AND. Show each active value as a removable chip and retain filter state only for the open canvas session.
 - **Consequences:** Kanban and graph behavior remain synchronized and Markdown/canonical order remain untouched. Saved views are deferred until user/workspace ownership and persistence are defined. Downstream-impact, dependency-depth, and blocked-count sorts are also deferred until their precise semantics and calculation cost are specified; future sorts must remain view-only.
+
+## ADR-10: Make status transitions authoritative for lifecycle dates
+
+- **Status:** Accepted
+- **Observations:** The edit operation accepted a supplied `completionDate` alongside a status change, allowing a blank value to suppress automatic completion dating or clear the date while reopening. Historical rows can legitimately have unknown completion dates.
+- **Assumptions:** Configured lifecycle-aware mutations are the supported way to change task status. Historical unknown dates must remain blank until a new completion transition provides evidence.
+- **Alternatives considered:** Trust callers not to include `completionDate`; reject every Complete task with a blank date; or apply lifecycle rules to status transitions and preserve unchanged historical records.
+- **Decision:** On a transition into the configured completion status, storage replaces any supplied completion date with the current date and rejects the transition if a date cannot be produced. On a transition out, storage preserves the previously stored date, including a historical blank. Manual date corrections remain available when status is unchanged.
+- **Consequences:** Edit, move, HTTP, and SDK action paths share one lifecycle rule. Existing Complete rows with unknown dates remain readable and are not backfilled. Direct Markdown status edits bypass storage and are prohibited by Copilot workflow guidance.

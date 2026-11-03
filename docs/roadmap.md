@@ -7,7 +7,7 @@ The template's task state is maintained in the table below. See [architecture](a
 - Markdown-backed board with source revisions, exclusive locking, and atomic replacement.
 - Example configuration and independent fixture project.
 - Search, multi-select shared filters with removable chips, per-column view sorting, card collapse, and a visible status footer; UX checks use an isolated synthetic project.
-- Configured completion dates and per-source non-reusable ID sequences, persisted through the existing Markdown transaction.
+- Configured completion dates and per-source non-reusable ID sequences, persisted through the existing Markdown transaction; status transitions override supplied dates, preserve unknown historical blanks, and are covered across edit, move, and HTTP paths.
 - A secondary read-only dependency graph with shared filters, explicit dependency-neighbourhood focus/expansion, board linking, graph-launched editing through the existing editor, cycle/unresolved warnings, zoom controls and an accessible relationship list.
 - Derived workflow intelligence for dependency readiness, blocked work, unresolved/cycle diagnostics, unique downstream impact, and the longest unweighted dependency chain. No schema or execution automation was added.
 

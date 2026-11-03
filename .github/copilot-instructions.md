@@ -374,6 +374,17 @@ All affected tasks should be moved to In Progress before implementation begins.
 
 Any unfinished tasks must remain In Progress when work stops.
 
+## Completion Date Lifecycle
+
+When a project configures `completionStatus` and a `completionDate` field:
+
+- Never complete or reopen a task by directly editing its Markdown row.
+- Use lifecycle-aware board operations, including the board status control or the `moveTask` / `editTask` action or API.
+- After completion, refresh the board and verify that Status is Complete and Completion Date is populated with the current date.
+- Verify that reopening preserves the existing Completion Date and recommpletion replaces it with the current date.
+- Do not supply or clear Completion Date in the same mutation as a status transition; status transitions own lifecycle-date changes.
+- A task is not successfully complete until the refreshed board reflects the expected status and lifecycle date.
+
 ---
 
 When reporting progress, always include:

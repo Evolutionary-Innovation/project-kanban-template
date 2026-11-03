@@ -12,6 +12,7 @@ import {
   readBoardSnapshot,
   BoardStorageError,
 } from "./board-storage.mjs";
+import { updateTaskRecord } from "./board-data.mjs";
 import { readBoardConfig } from "./board-config.mjs";
 
 const templateRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -186,13 +187,6 @@ test("keeps creation and latest completion dates independent across the task lif
   assert.equal(task.createdDate, todayDateOnly());
   assert.equal(task.completionDate, todayDateOnly());
 
-  board = await editTaskInDocuments(root, config, {
-    taskId: "TD-01",
-    updates: { status: "Complete" },
-    revisions: board.revisions,
-  });
-  assert.equal(board.tasks.find(({ id }) => id === "TD-01").completionDate, todayDateOnly());
-
   board = await createTaskInDocuments(root, config, {
     sourceType: "roadmap",
     task: {
@@ -233,6 +227,104 @@ test("keeps creation and latest completion dates independent across the task lif
     }),
     (error) => error instanceof BoardStorageError && error.code === "board_input_invalid",
   );
+});
+
+test("enforces completion dates on edit transitions when completionDate is supplied", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  let board = await readBoardSnapshot(root, config);
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Complete through edit transitions",
+      area: "Testing",
+      priority: "Medium",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  let task = board.tasks.find(({ title }) => title === "Complete through edit transitions");
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { status: "Complete", completionDate: "" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.completionDate, todayDateOnly());
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { status: "In Progress", completionDate: "" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.completionDate, todayDateOnly());
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { completionDate: "2020-01-01" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.completionDate, "2020-01-01");
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { status: "Complete", completionDate: "" },
+    revisions: board.revisions,
+  });
+  assert.equal(board.tasks.find(({ id }) => id === task.id).completionDate, todayDateOnly());
+});
+
+test("preserves historical blank completion dates on reopen and sets a date on recommpletion", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  let board = await readBoardSnapshot(root, config);
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Preserve an unknown historical completion date",
+      area: "Testing",
+      priority: "Medium",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  let task = board.tasks.find(({ title }) => title === "Preserve an unknown historical completion date");
+  const source = config.sources.find(({ path }) => path === task.source.document);
+  const sourcePath = join(root, source.path);
+  const sourceMarkdown = await readFile(sourcePath, "utf8");
+  await writeFile(
+    sourcePath,
+    updateTaskRecord(
+      sourceMarkdown,
+      task.id,
+      { status: "Complete", completionDate: "" },
+      source,
+      config,
+    ),
+  );
+
+  board = await readBoardSnapshot(root, config);
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.status, "Complete");
+  assert.equal(task.completionDate, "");
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { status: "In Progress", completionDate: "" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.equal(task.completionDate, "");
+
+  board = await editTaskInDocuments(root, config, {
+    taskId: task.id,
+    updates: { status: "Complete", completionDate: "" },
+    revisions: board.revisions,
+  });
+  assert.equal(board.tasks.find(({ id }) => id === task.id).completionDate, todayDateOnly());
 });
 
 test("persists cross-source dependencies and rejects edits that introduce cycles", async (t) => {

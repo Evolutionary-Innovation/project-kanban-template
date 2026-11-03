@@ -1,8 +1,29 @@
 import assert from "node:assert/strict";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { BoardStorageError } from "./board-storage.mjs";
+import {
+  BoardStorageError,
+  createTaskInDocuments,
+  editTaskInDocuments,
+  moveTaskInDocuments,
+  readBoardSnapshot,
+} from "./board-storage.mjs";
+import { readBoardConfig } from "./board-config.mjs";
 import { createBoardRequestHandler } from "./board-server.mjs";
+
+const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+
+async function createWorkspace(t) {
+  const root = await mkdtemp(join(tmpdir(), "project-kanban-api-test-"));
+  await cp(join(workspaceRoot, "project-kanban.config.json"), join(root, "project-kanban.config.json"));
+  await cp(join(workspaceRoot, "docs"), join(root, "docs"), { recursive: true });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return { root, config: await readBoardConfig(root) };
+}
 
 test("serves mutation results and maps stale revisions to HTTP 409", async (context) => {
   const handler = await createBoardRequestHandler({
@@ -59,6 +80,79 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
     error: "The dependency would create a cycle.",
     code: "board_dependency_cycle",
   });
+});
+
+test("applies completion lifecycle through edit and move API routes", async (context) => {
+  const { root, config } = await createWorkspace(context);
+  let board = await readBoardSnapshot(root, config);
+  board = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Exercise lifecycle API routes",
+      area: "Testing",
+      priority: "Medium",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  let task = board.tasks.find(({ title }) => title === "Exercise lifecycle API routes");
+  const handler = await createBoardRequestHandler({
+    loadBoard: () => readBoardSnapshot(root, config),
+    moveTask: (input) => moveTaskInDocuments(root, config, input),
+    createTask: (input) => createTaskInDocuments(root, config, input),
+    editTask: (input) => editTaskInDocuments(root, config, input),
+    deleteTask: async () => ({ deleted: true }),
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections?.();
+  }));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const origin = `http://127.0.0.1:${address.port}`;
+
+  async function mutate(path, input) {
+    const response = await fetch(`${origin}${path}`, {
+      method: "POST",
+      headers: { Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const result = await response.json();
+    assert.equal(response.status, 200, result.error);
+    return result;
+  }
+
+  board = await mutate("/api/tasks/edit", {
+    taskId: task.id,
+    updates: { status: "Complete", completionDate: "" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.match(task.completionDate, /^\d{4}-\d{2}-\d{2}$/);
+
+  board = await mutate("/api/tasks/edit", {
+    taskId: task.id,
+    updates: { status: "In Progress", completionDate: "" },
+    revisions: board.revisions,
+  });
+  task = board.tasks.find(({ id }) => id === task.id);
+  assert.notEqual(task.completionDate, "");
+
+  board = await mutate("/api/tasks/edit", {
+    taskId: task.id,
+    updates: { completionDate: "2020-01-01" },
+    revisions: board.revisions,
+  });
+  board = await mutate("/api/tasks/move", {
+    taskId: task.id,
+    status: "Complete",
+    order: 100,
+    revisions: board.revisions,
+  });
+  assert.notEqual(board.tasks.find(({ id }) => id === task.id).completionDate, "2020-01-01");
 });
 
 test("rejects cross-origin and non-JSON mutations before calling handlers", async (context) => {

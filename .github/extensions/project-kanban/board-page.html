@@ -66,12 +66,19 @@
           <fieldset class="filter-options"><legend>Dependency state</legend></fieldset>
         </details>
         <div class="view-actions">
+          <button id="review-dependency-suggestions" class="secondary-button" type="button" aria-expanded="false" aria-controls="dependency-suggestions-panel">Dependency suggestions (0)</button>
           <button id="clear-filters" class="secondary-button" type="button">Clear</button>
           <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
           <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
         </div>
       </section>
       <div id="active-filter-chips" class="active-filter-chips" role="group" aria-label="Active filters" hidden></div>
+      <section id="dependency-suggestions-panel" class="dependency-suggestions" aria-labelledby="dependency-suggestions-heading" hidden>
+        <h2 id="dependency-suggestions-heading">Dependency suggestions</h2>
+        <p>Review-only candidates. Suggestions do not affect graph edges, blocker state, workflow analytics, or readiness until approved.</p>
+        <p id="dependency-suggestions-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div id="dependency-suggestions-list" class="dependency-suggestion-list"></div>
+      </section>
       <p id="ordering-hint" class="ordering-hint" hidden>
         Manual reorder is disabled while search or filters hide cards, or while a column uses a non-manual sort.
       </p>

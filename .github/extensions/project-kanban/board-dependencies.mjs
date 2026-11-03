@@ -3,6 +3,24 @@ function taskIdPattern(source) {
   return new RegExp(`^${prefix}-\\d{${source.idWidth},}$`);
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function evidenceSnippet(value, index, length) {
+  let start = Math.max(0, index - 80);
+  let end = Math.min(value.length, index + length + 100);
+  if (start > 0) {
+    const boundary = value.slice(start, index).search(/\s/);
+    if (boundary >= 0) start += boundary + 1;
+  }
+  if (end < value.length) {
+    const boundary = value.slice(index + length, end).search(/\s/);
+    if (boundary >= 0) end = index + length + boundary;
+  }
+  return `${start > 0 ? "…" : ""}${value.slice(start, end).trim()}${end < value.length ? "…" : ""}`;
+}
+
 export function parseDependencyIds(value, config) {
   if (typeof value !== "string") {
     throw new TypeError("Depends On must be a comma-separated list of task IDs.");
@@ -24,6 +42,72 @@ export function parseDependencyIds(value, config) {
     seen.add(id);
   }
   return ids;
+}
+
+export function findDependencySuggestions(tasks, config) {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const taskIdFormats = config.sources.map(
+    ({ idPrefix, idWidth }) => `${escapeRegExp(idPrefix)}-\\d{${idWidth},}`,
+  );
+  if (taskIdFormats.length === 0) return [];
+
+  const id = `(?<id>(?<![A-Z0-9_-])(?:${taskIdFormats.join("|")})(?![A-Z0-9_-]))`;
+  const rules = [
+    { phrase: "blocked by", confidence: 0.96, pattern: new RegExp(`\\bblocked\\s+by\\s+${id}`, "gi") },
+    { phrase: "depends on", confidence: 0.96, pattern: new RegExp(`\\bdepends\\s+on\\s+${id}`, "gi") },
+    { phrase: "must complete first", confidence: 0.95, pattern: new RegExp(`\\bmust\\s+complete\\s+${id}\\s+first\\b`, "gi") },
+    { phrase: "after completion of", confidence: 0.9, pattern: new RegExp(`\\bafter\\s+completion\\s+of\\s+${id}`, "gi") },
+    { phrase: "prerequisite", confidence: 0.9, pattern: new RegExp(`\\bprerequisite(?:\\s+is|\\s*:)?\\s+${id}`, "gi") },
+    { phrase: "requires", confidence: 0.82, pattern: new RegExp(`\\brequires\\s+(?:completion\\s+of\\s+)?${id}`, "gi") },
+  ];
+  const suggestionsByEdge = new Map();
+
+  for (const task of tasks) {
+    const existingDependencies = new Set(parseDependencyIds(task.dependsOn ?? "", config));
+    const source = config.sources.find(({ path }) => path === task.source?.document);
+    const fields = [
+      { key: "details", label: "Details", value: task.details },
+      ...(source?.extraFields ?? [])
+        .filter(({ type }) => type === "text" || type === "textarea")
+        .map(({ key, label }) => ({ key, label, value: task[key] })),
+    ];
+
+    for (const field of fields) {
+      if (typeof field.value !== "string" || field.value.trim() === "") continue;
+      for (const rule of rules) {
+        for (const match of field.value.matchAll(rule.pattern)) {
+          const prerequisiteId = match.groups?.id;
+          const prerequisite = taskById.get(prerequisiteId);
+          if (!prerequisite || prerequisiteId === task.id || existingDependencies.has(prerequisiteId)) continue;
+
+          const suggestion = {
+            id: `${task.id}->${prerequisiteId}`,
+            dependentTaskId: task.id,
+            dependentTaskTitle: task.title,
+            prerequisiteTaskId: prerequisite.id,
+            prerequisiteTaskTitle: prerequisite.title,
+            fieldKey: field.key,
+            field: field.label,
+            evidence: evidenceSnippet(field.value, match.index, match[0].length),
+            relationshipPhrase: rule.phrase,
+            confidence: rule.confidence,
+            confidenceLabel: rule.confidence >= 0.9 ? "High" : "Medium",
+          };
+          const current = suggestionsByEdge.get(suggestion.id);
+          if (!current || suggestion.confidence > current.confidence) {
+            suggestionsByEdge.set(suggestion.id, suggestion);
+          }
+        }
+      }
+    }
+  }
+
+  return [...suggestionsByEdge.values()].sort(
+    (left, right) =>
+      right.confidence - left.confidence ||
+      left.dependentTaskId.localeCompare(right.dependentTaskId) ||
+      left.prerequisiteTaskId.localeCompare(right.prerequisiteTaskId),
+  );
 }
 
 export function normalizeDependencyIds(value, config) {

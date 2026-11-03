@@ -387,6 +387,21 @@ When a project configures `completionStatus` and a `completionDate` field:
 
 ---
 
+## Task Dependency Capture
+
+When creating or modifying tasks:
+
+1. Assess prerequisite relationships described in task content.
+2. Use `Depends On` only for actual blockers.
+3. Review deterministic dependency suggestions before approving them.
+4. Do not rely solely on narrative references; approved relationships must be written to `Depends On`.
+5. Refresh the board and verify the resulting graph relationships.
+6. If a candidate is uncertain, leave it unapproved and report the uncertainty.
+
+Suggestions are review-only and do not affect graph edges, blocker state, workflow analytics, downstream impact, longest-chain calculations, or readiness until approved.
+
+---
+
 When reporting progress, always include:
 
 ### Started

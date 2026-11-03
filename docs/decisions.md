@@ -91,3 +91,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Trust callers not to include `completionDate`; reject every Complete task with a blank date; or apply lifecycle rules to status transitions and preserve unchanged historical records.
 - **Decision:** On a transition into the configured completion status, storage replaces any supplied completion date with the current date and rejects the transition if a date cannot be produced. On a transition out, storage preserves the previously stored date, including a historical blank. Manual date corrections remain available when status is unchanged.
 - **Consequences:** Edit, move, HTTP, and SDK action paths share one lifecycle rule. Existing Complete rows with unknown dates remain readable and are not backfilled. Direct Markdown status edits bypass storage and are prohibited by Copilot workflow guidance.
+
+## ADR-11: Keep dependency suggestions separate until approved
+
+- **Status:** Accepted
+- **Observations:** Task narratives can contain explicit prerequisite relationships that are absent from canonical `Depends On` fields. Automatically turning narrative matches into edges risks false dependencies and would change blocker and workflow calculations without review.
+- **Assumptions:** Exact configured task IDs paired with a small deterministic set of directional phrases are useful review candidates; users can approve each real blocker through the existing task editor workflow.
+- **Alternatives considered:** Automatically create edges from narrative matches, use semantic/LLM matching, or rely only on agent instructions to populate `Depends On`.
+- **Decision:** Discover candidates from Details and configured text/textarea fields using exact task-ID matching and explicit phrases. Return them as a separate projection with field, evidence, phrase, and confidence. Suggestions do not affect canonical dependencies or graph analytics until a user approves them. Approval uses the existing revision-checked edit transaction and cycle validation; dismissals remain browser-local.
+- **Consequences:** No schema, graph store, or new dependency is required, and uncertain candidates cannot silently alter readiness or blockers. Users in different browsers review independently; only approved `Depends On` values are shared project state.

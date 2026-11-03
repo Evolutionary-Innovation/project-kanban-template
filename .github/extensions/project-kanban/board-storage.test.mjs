@@ -44,7 +44,8 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
     },
     revisions: board.revisions,
   });
-  assert.ok(createdRoadmap.tasks.some(({ id, title }) => id === "RM-003" && title === "Test a generated starter"));
+  const generatedRoadmapTask = createdRoadmap.tasks.find(({ title }) => title === "Test a generated starter");
+  assert.match(generatedRoadmapTask.id, /^RM-\d{3}$/);
 
   board = createdRoadmap;
   const createdDebt = await createTaskInDocuments(root, config, {
@@ -78,7 +79,7 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
   assert.ok(createdAudit.tasks.some(({ id }) => id === "RA-002"));
 
   const roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
-  assert.match(roadmapText, /\| RM-003 \| Test a generated starter \|/);
+  assert.match(roadmapText, new RegExp(`\\| ${generatedRoadmapTask.id} \\| Test a generated starter \\|`));
   const debtText = await readFile(join(root, "docs/technical-debt.md"), "utf8");
   assert.match(debtText, /\| TD-02 \| Reduce repeated configuration \|/);
   assert.match(debtText, /Keep only values needed by real projects/);
@@ -105,13 +106,13 @@ test("keeps source task IDs monotonic when the highest ID is deleted", async (t)
   const { root, config } = await createWorkspace(t);
   let board = await readBoardSnapshot(root, config);
   board = await deleteTaskInDocuments(root, config, {
-    taskId: "RM-002",
+    taskId: "RM-003",
     confirmed: true,
     revisions: board.revisions,
   });
 
   let roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
-  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:3 -->/);
+  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:4 -->/);
   board = await createTaskInDocuments(root, config, {
     sourceType: "roadmap",
     task: {
@@ -123,10 +124,10 @@ test("keeps source task IDs monotonic when the highest ID is deleted", async (t)
     },
     revisions: board.revisions,
   });
-  assert.ok(board.tasks.some(({ id }) => id === "RM-003"));
+  assert.ok(board.tasks.some(({ id }) => id === "RM-004"));
 
   board = await deleteTaskInDocuments(root, config, {
-    taskId: "RM-003",
+    taskId: "RM-004",
     confirmed: true,
     revisions: board.revisions,
   });
@@ -141,9 +142,9 @@ test("keeps source task IDs monotonic when the highest ID is deleted", async (t)
     },
     revisions: board.revisions,
   });
-  assert.ok(board.tasks.some(({ id }) => id === "RM-004"));
+  assert.ok(board.tasks.some(({ id }) => id === "RM-005"));
   roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
-  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:5 -->/);
+  assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:6 -->/);
 });
 
 test("keeps creation and latest completion dates independent across the task lifecycle", async (t) => {
@@ -372,7 +373,7 @@ test("rejects malformed, duplicate, and self-referential dependencies on task cr
     details: "",
   };
 
-  for (const dependsOn of ["XX-001", "RM-001, RM-001", "RM-003"]) {
+  for (const dependsOn of ["XX-001", "RM-001, RM-001", "RM-004"]) {
     await assert.rejects(
       createTaskInDocuments(root, config, {
         sourceType: "roadmap",

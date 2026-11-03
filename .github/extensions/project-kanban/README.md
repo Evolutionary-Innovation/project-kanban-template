@@ -24,6 +24,8 @@ Shared search and multi-select filters apply in both views. Values within a filt
 
 The board footer and graph inspector show derived workflow intelligence: dependency-ready and blocked counts, cycle/unresolved warnings, and unique downstream impact. The graph highlights the longest unweighted dependency chain, excluding cycle tasks. It is not a schedule critical path because task durations are not configured. Readiness is advisory only and does not change task status or trigger execution.
 
+The board also provides a review panel for deterministic dependency suggestions found in configured narrative fields. Suggestions use exact task IDs paired with explicit relationship phrases and remain outside canonical graph calculations until approved. Approval uses the existing cycle-checked `Depends On` edit; dismissals are saved in the current browser only.
+
 Refresh from Markdown and subsequent successful task mutations update the same snapshot used by both views. The graph preserves selection when possible and caches topology-based layout. Layout runs in a same-origin module worker, terminated on completion, view exit, replacement, or error. Failed graph loads show Retry/Return to Kanban and never create a second mutation path. Failed Markdown refresh clears the graph rather than presenting stale data.
 
 The [pinned Dagre bundle and licence inventory](vendor/README.md) is served locally only when graph layout is needed. No consumer build step, CDN, or framework is required. Graph routes are allowlisted; CSP adds only `worker-src 'self'`.

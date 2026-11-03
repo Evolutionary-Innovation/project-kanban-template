@@ -54,6 +54,70 @@
   overflow-wrap: anywhere;
 }
 
+.dependency-suggestions {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid #d3e1e3;
+  border-radius: 12px;
+  background: #f7faf9;
+}
+
+.dependency-suggestions h2,
+.dependency-suggestion h3 {
+  margin: 0 0 8px;
+}
+
+.dependency-suggestions > p,
+.dependency-suggestion > p {
+  color: #536b76;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.dependency-suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 10px;
+}
+
+.dependency-suggestion {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d3e1e3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.dependency-suggestion h3 {
+  color: #294c5c;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.dependency-suggestion blockquote {
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 3px solid #83b4b1;
+  color: #536b76;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dependency-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dependency-suggestion-confidence {
+  font-weight: 700;
+}
+
+.dependency-suggestion-confidence[data-confidence="Medium"] {
+  color: #8a641c;
+}
+
 html {
   overflow-x: hidden;
 }

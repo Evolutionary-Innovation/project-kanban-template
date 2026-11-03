@@ -155,6 +155,73 @@ test("applies completion lifecycle through edit and move API routes", async (con
   assert.notEqual(board.tasks.find(({ id }) => id === task.id).completionDate, "2020-01-01");
 });
 
+test("approves a dependency suggestion through the canonical edit route and rejects cycles", async (context) => {
+  const { root, config } = await createWorkspace(context);
+  let board = await readBoardSnapshot(root, config);
+  board = await editTaskInDocuments(root, config, {
+    taskId: "RM-001",
+    updates: { details: "This task depends on TD-01." },
+    revisions: board.revisions,
+  });
+  const handler = await createBoardRequestHandler({
+    loadBoard: () => readBoardSnapshot(root, config),
+    moveTask: (input) => moveTaskInDocuments(root, config, input),
+    createTask: (input) => createTaskInDocuments(root, config, input),
+    editTask: (input) => editTaskInDocuments(root, config, input),
+    deleteTask: async () => ({ deleted: true }),
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections?.();
+  }));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const origin = `http://127.0.0.1:${address.port}`;
+
+  const initial = await fetch(`${origin}/api/board`);
+  assert.equal(initial.status, 200);
+  board = await initial.json();
+  const suggestion = board.dependencySuggestions.find(
+    ({ dependentTaskId, prerequisiteTaskId }) => dependentTaskId === "RM-001" && prerequisiteTaskId === "TD-01",
+  );
+  assert.ok(suggestion);
+  assert.deepEqual(board.dependencyGraph.edges, []);
+  assert.deepEqual(board.tasks.find(({ id }) => id === "RM-001").dependencyView.dependsOn, []);
+  assert.equal(board.tasks.find(({ id }) => id === "RM-001").dependencyView.isBlocked, false);
+
+  const approved = await fetch(`${origin}/api/tasks/edit`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      taskId: suggestion.dependentTaskId,
+      updates: { dependsOn: suggestion.prerequisiteTaskId },
+      revisions: board.revisions,
+    }),
+  });
+  assert.equal(approved.status, 200);
+  board = await approved.json();
+  assert.deepEqual(board.dependencyGraph.edges, [
+    { source: "TD-01", target: "RM-001", unresolved: false },
+  ]);
+  assert.deepEqual(board.tasks.find(({ id }) => id === "RM-001").dependencyView.dependsOn, ["TD-01"]);
+  assert.equal(board.tasks.find(({ id }) => id === "RM-001").dependencyView.isBlocked, true);
+  assert.deepEqual(board.dependencySuggestions, []);
+
+  const cycle = await fetch(`${origin}/api/tasks/edit`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      taskId: "TD-01",
+      updates: { dependsOn: "RM-001" },
+      revisions: board.revisions,
+    }),
+  });
+  assert.equal(cycle.status, 400);
+  assert.equal((await cycle.json()).code, "board_dependency_cycle");
+});
+
 test("rejects cross-origin and non-JSON mutations before calling handlers", async (context) => {
   let called = false;
   const handler = await createBoardRequestHandler({

@@ -4,6 +4,7 @@ import test from "node:test";
 import { readBoardConfig } from "./board-config.mjs";
 import {
   analyzeDependencies,
+  findDependencySuggestions,
   findIntroducedDependencyCycle,
   parseDependencyIds,
 } from "./board-dependencies.mjs";
@@ -39,6 +40,127 @@ test("derives blockers and graph edges from stored Depends On relationships", as
   assert.deepEqual(graph.edges[0], { source: "TD-03", target: "RM-019", unresolved: false });
   assert.deepEqual(graph.unresolvedIds, ["TD-99"]);
   assert.deepEqual(graph.cyclicTaskIds, ["RM-021", "RM-022"]);
+});
+
+test("suggests only exact task IDs paired with explicit dependency phrases", async () => {
+  const config = await readBoardConfig(workspaceRoot);
+  const tasks = [
+    {
+      id: "RM-019",
+      title: "Dependent task",
+      details: "This work depends on TD-03. It also mentions RA-005 and TD-0300.",
+      evidence: "Blocked by RA-005; the narrative includes no other relationship.",
+      dependsOn: "",
+      source: { document: "docs/roadmap.md" },
+    },
+    {
+      id: "TD-03",
+      title: "Prerequisite debt task",
+      details: "",
+      dependsOn: "",
+      source: { document: "docs/technical-debt.md" },
+    },
+    {
+      id: "TD-030",
+      title: "Longer ID",
+      details: "",
+      dependsOn: "",
+      source: { document: "docs/technical-debt.md" },
+    },
+    {
+      id: "RA-005",
+      title: "Audit prerequisite",
+      details: "",
+      dependsOn: "",
+      source: { document: "docs/repository-audit.md" },
+    },
+    {
+      id: "RM-020",
+      title: "Already canonical",
+      details: "This is blocked by TD-03.",
+      dependsOn: "TD-03",
+      source: { document: "docs/roadmap.md" },
+    },
+    {
+      id: "TD-04",
+      title: "Unrelated task",
+      details: "Reviewed RM-019 and requires completion of TD-0300.",
+      dependsOn: "",
+      source: { document: "docs/technical-debt.md" },
+    },
+  ];
+
+  const suggestions = findDependencySuggestions(tasks, config);
+
+  assert.deepEqual(
+    suggestions.map(({ dependentTaskId, prerequisiteTaskId, field, relationshipPhrase, confidenceLabel }) => ({
+      dependentTaskId,
+      prerequisiteTaskId,
+      field,
+      relationshipPhrase,
+      confidenceLabel,
+    })),
+    [
+      {
+        dependentTaskId: "RM-019",
+        prerequisiteTaskId: "RA-005",
+        field: "Evidence",
+        relationshipPhrase: "blocked by",
+        confidenceLabel: "High",
+      },
+      {
+        dependentTaskId: "RM-019",
+        prerequisiteTaskId: "TD-03",
+        field: "Details",
+        relationshipPhrase: "depends on",
+        confidenceLabel: "High",
+      },
+    ],
+  );
+  const dependsOnSuggestion = suggestions.find(({ prerequisiteTaskId }) => prerequisiteTaskId === "TD-03");
+  assert.match(dependsOnSuggestion.evidence, /depends on TD-03/);
+  assert.equal(dependsOnSuggestion.confidence, 0.96);
+  assert.equal(suggestions.some(({ prerequisiteTaskId }) => prerequisiteTaskId === "TD-030"), false);
+  assert.equal(suggestions.some(({ dependentTaskId }) => dependentTaskId === "RM-020"), false);
+  assert.equal(suggestions.some(({ dependentTaskId }) => dependentTaskId === "TD-04"), false);
+});
+
+test("supports explicit dependency phrase variants without title or bare-ID matching", async () => {
+  const config = await readBoardConfig(workspaceRoot);
+  const phrases = [
+    ["requires", "The work requires RA-005.", 0.82],
+    ["must complete first", "Must complete TD-03 first.", 0.95],
+    ["after completion of", "Begin after completion of RM-021.", 0.9],
+    ["prerequisite", "Prerequisite: TD-030.", 0.9],
+  ];
+  const tasks = [
+    {
+      id: "RM-019",
+      title: "No title matching",
+      details: phrases.map(([, text]) => text).join(" "),
+      dependsOn: "",
+      source: { document: "docs/roadmap.md" },
+    },
+    ...["TD-03", "TD-030", "RA-005", "RM-021"].map((id) => ({
+      id,
+      title: "Prerequisite",
+      details: "",
+      dependsOn: "",
+      source: { document: config.sources.find(({ idPrefix }) => id.startsWith(`${idPrefix}-`)).path },
+    })),
+  ];
+
+  const suggestions = findDependencySuggestions(tasks, config);
+  assert.deepEqual(
+    suggestions.map(({ relationshipPhrase, confidence }) => [relationshipPhrase, confidence]),
+    [
+      ["must complete first", 0.95],
+      ["after completion of", 0.9],
+      ["prerequisite", 0.9],
+      ["requires", 0.82],
+    ],
+  );
+  assert.ok(suggestions.every(({ prerequisiteTaskTitle }) => prerequisiteTaskTitle === "Prerequisite"));
 });
 
 test("rejects newly introduced cycles while permitting acyclic cross-source references", async () => {

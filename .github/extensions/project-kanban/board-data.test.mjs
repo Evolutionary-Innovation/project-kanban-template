@@ -32,9 +32,38 @@ test("parses the configured starter documents into status-derived columns", asyn
 
   assert.equal(board.config.boardTitle, "Project Kanban");
   assert.deepEqual(board.columns.map(({ status }) => status), config.statuses);
-  assert.equal(board.tasks.length, 4);
+  assert.ok(board.tasks.length >= 4);
   assert.ok(board.tasks.every((task) => config.statuses.includes(task.status)));
   assert.deepEqual(board.sources, config.sources.map(({ path }) => path));
+});
+
+test("keeps narrative dependency suggestions separate from the canonical graph", async () => {
+  const { config, documents } = await loadProject();
+  const baseline = parseBoardDocuments(documents, config);
+  const roadmapPath = config.sources.find(({ key }) => key === "roadmap").path;
+  const narrativeDocuments = {
+    ...documents,
+    [roadmapPath]: documents[roadmapPath].replace(
+      "Verify workspace extension loading behavior against supported host contracts.",
+      "This task depends on TD-01.",
+    ),
+  };
+  const board = parseBoardDocuments(narrativeDocuments, config);
+
+  assert.deepEqual(board.dependencyGraph, baseline.dependencyGraph);
+  assert.deepEqual(
+    board.tasks.find(({ id }) => id === "RM-001").dependencyView,
+    baseline.tasks.find(({ id }) => id === "RM-001").dependencyView,
+  );
+  assert.deepEqual(
+    board.dependencySuggestions.map(({ dependentTaskId, prerequisiteTaskId, field, relationshipPhrase }) => ({
+      dependentTaskId,
+      prerequisiteTaskId,
+      field,
+      relationshipPhrase,
+    })),
+    [{ dependentTaskId: "RM-001", prerequisiteTaskId: "TD-01", field: "Details", relationshipPhrase: "depends on" }],
+  );
 });
 
 test("reads schema-v1 tables with omitted optional fields and normalizes them on write", async () => {

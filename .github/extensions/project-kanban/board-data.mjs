@@ -1,6 +1,7 @@
 import { getLegacyAdapter } from "./legacy-adapters.mjs";
 import {
   analyzeDependencies,
+  findDependencySuggestions,
   normalizeDependencyIds,
   parseDependencyIds,
 } from "./board-dependencies.mjs";
@@ -214,6 +215,7 @@ function buildBoard(tasks, config) {
       left.id.localeCompare(right.id),
   );
   const dependencyAnalysis = analyzeDependencies(sortedTasks, config);
+  const dependencySuggestions = findDependencySuggestions(sortedTasks, config);
   const projectedTasks = sortedTasks.map((task) => ({
     ...task,
     dependencyView: dependencyAnalysis.taskViews.get(task.id),
@@ -227,6 +229,7 @@ function buildBoard(tasks, config) {
       cards: projectedTasks.filter((task) => task.status === status),
     })),
     dependencyGraph: dependencyAnalysis.graph,
+    dependencySuggestions,
     sources: config.sources.map(({ path }) => path),
     config: {
       projectName: config.projectName,

@@ -33,6 +33,10 @@ const graphPanel = document.querySelector("#graph-panel");
 const kanbanButton = document.querySelector("#show-kanban");
 const graphButton = document.querySelector("#show-graph");
 const viewToolbar = document.querySelector(".view-toolbar");
+const dependencySuggestionsButton = document.querySelector("#review-dependency-suggestions");
+const dependencySuggestionsPanel = document.querySelector("#dependency-suggestions-panel");
+const dependencySuggestionsList = document.querySelector("#dependency-suggestions-list");
+const dependencySuggestionsStatus = document.querySelector("#dependency-suggestions-status");
 let activeView = "kanban";
 let graphController = null;
 let graphModuleAttempt = 0;
@@ -40,6 +44,9 @@ let graphViewGeneration = 0;
 let pendingGraphTaskId = null;
 let boardLoadError = "";
 let boardSnapshot = null;
+let dismissedSuggestionScope = "";
+let dismissedSuggestionIds = new Set();
+let dependencySuggestionsExpanded = false;
 let draggedTaskId = null;
 let dialogMode = null;
 const collapsedTaskIds = new Set();
@@ -55,6 +62,136 @@ const viewState = {
   dependency: [],
 };
 
+function loadDismissedSuggestionIds() {
+  const scope = `project-kanban:dependency-suggestions:v1:${boardSnapshot.config.projectName}`;
+  if (scope === dismissedSuggestionScope) return;
+
+  dismissedSuggestionScope = scope;
+  dismissedSuggestionIds = new Set();
+  dependencySuggestionsStatus.textContent = "";
+  try {
+    const stored = window.localStorage.getItem(scope);
+    if (stored === null) return;
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed) || parsed.some((id) => typeof id !== "string")) {
+      throw new Error("Saved dismissals have an invalid format.");
+    }
+    dismissedSuggestionIds = new Set(parsed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown storage error.";
+    dependencySuggestionsStatus.textContent = `Previously dismissed suggestions could not be loaded: ${message}`;
+  }
+}
+
+function persistDismissedSuggestionIds() {
+  try {
+    window.localStorage.setItem(dismissedSuggestionScope, JSON.stringify([...dismissedSuggestionIds]));
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown storage error.";
+    dependencySuggestionsStatus.textContent = `Dismissal was kept for this page only because browser storage failed: ${message}`;
+    return false;
+  }
+}
+
+function renderDependencySuggestions() {
+  const suggestions = boardSnapshot.dependencySuggestions;
+  loadDismissedSuggestionIds();
+  const availableIds = new Set(suggestions.map(({ id }) => id));
+  let dismissedStateChanged = false;
+  for (const id of dismissedSuggestionIds) {
+    if (availableIds.has(id)) continue;
+    dismissedSuggestionIds.delete(id);
+    dismissedStateChanged = true;
+  }
+  if (dismissedStateChanged) persistDismissedSuggestionIds();
+
+  const visibleSuggestions = suggestions.filter(({ id }) => !dismissedSuggestionIds.has(id));
+  dependencySuggestionsButton.textContent = `Dependency suggestions (${visibleSuggestions.length})`;
+  dependencySuggestionsButton.setAttribute("aria-expanded", String(dependencySuggestionsExpanded));
+  dependencySuggestionsPanel.hidden = !dependencySuggestionsExpanded;
+  dependencySuggestionsList.replaceChildren();
+
+  if (visibleSuggestions.length === 0) {
+    const emptyState = document.createElement("p");
+    emptyState.textContent = suggestions.length === 0
+      ? "No dependency suggestions were detected."
+      : "All detected suggestions have been reviewed or dismissed.";
+    dependencySuggestionsList.append(emptyState);
+    return;
+  }
+
+  for (const suggestion of visibleSuggestions) {
+    const card = document.createElement("article");
+    card.className = "dependency-suggestion";
+    const heading = document.createElement("h3");
+    heading.textContent =
+      `${suggestion.dependentTaskId}: ${stripTaskIdTitle(suggestion.dependentTaskId, suggestion.dependentTaskTitle)} ` +
+      `may depend on ${suggestion.prerequisiteTaskId}: ` +
+      stripTaskIdTitle(suggestion.prerequisiteTaskId, suggestion.prerequisiteTaskTitle);
+
+    const metadata = document.createElement("p");
+    metadata.textContent =
+      `Found in ${suggestion.field} via “${suggestion.relationshipPhrase}” · ` +
+      `Confidence: ${suggestion.confidenceLabel} (${Math.round(suggestion.confidence * 100)}%)`;
+
+    const evidence = document.createElement("blockquote");
+    evidence.textContent = suggestion.evidence;
+
+    const actions = document.createElement("div");
+    actions.className = "dependency-suggestion-actions";
+    for (const [action, label] of [
+      ["approve", "Approve"],
+      ["dismiss", "Not a Dependency"],
+    ]) {
+      const button = document.createElement("button");
+      button.className = "secondary-button";
+      button.type = "button";
+      button.dataset.suggestionAction = action;
+      button.dataset.suggestionId = suggestion.id;
+      button.textContent = label;
+      actions.append(button);
+    }
+
+    card.append(heading, metadata, evidence, actions);
+    dependencySuggestionsList.append(card);
+  }
+}
+
+async function approveDependencySuggestion(suggestion) {
+  const dependent = boardSnapshot?.tasks.find(({ id }) => id === suggestion.dependentTaskId);
+  if (!dependent) {
+    dependencySuggestionsStatus.textContent = `Task ${suggestion.dependentTaskId} is no longer available. Refresh and retry.`;
+    return;
+  }
+
+  const dependencyIds = String(dependent.dependsOn ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (dependencyIds.includes(suggestion.prerequisiteTaskId)) {
+    dependencySuggestionsStatus.textContent = "This dependency is already present. Refresh the board to update suggestions.";
+    return;
+  }
+
+  try {
+    await postTaskMutation(
+      "/api/tasks/edit",
+      {
+        taskId: dependent.id,
+        updates: { dependsOn: [...dependencyIds, suggestion.prerequisiteTaskId].join(", ") },
+      },
+      `Approving ${dependent.id} → ${suggestion.prerequisiteTaskId}…`,
+    );
+    dependencySuggestionsStatus.textContent =
+      `Approved ${dependent.id} → ${suggestion.prerequisiteTaskId}; the canonical graph has been refreshed.`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown dependency approval error.";
+    dependencySuggestionsStatus.textContent = `Could not approve this dependency: ${message}`;
+    statusElement.textContent = `Could not approve this dependency: ${message}`;
+  }
+}
+
 function appendTag(parent, label, className = "") {
   const tag = document.createElement("span");
   tag.className = `card-tag ${className}`.trim();
@@ -64,6 +201,11 @@ function appendTag(parent, label, className = "") {
 
 function sourceForTask(task) {
   return boardSnapshot.config.sources.find(({ path }) => path === task.source.document);
+}
+
+function stripTaskIdTitle(taskId, title) {
+  const prefix = `${taskId}: `;
+  return title.startsWith(prefix) ? title.slice(prefix.length) : title;
 }
 
 function canonicalTaskOrder(left, right) {
@@ -86,7 +228,7 @@ function updateBoardSummary() {
   if (!boardSnapshot) return;
   if (boardLoadError) {
     boardStatistics.textContent = "Task counts unavailable.";
-    orderingHint.hidden = true;
+orderingHint.hidden = true;
     return;
   }
   const matchingTasks = filterTasks(boardSnapshot.tasks, boardSnapshot.config, viewState);
@@ -381,6 +523,7 @@ function renderBoard(payload) {
     !payload ||
     !Array.isArray(payload.columns) ||
     !Array.isArray(payload.tasks) ||
+    !Array.isArray(payload.dependencySuggestions) ||
     !Array.isArray(payload.sources) ||
     !payload.config ||
     !Array.isArray(payload.config.statuses) ||
@@ -405,6 +548,7 @@ function renderBoard(payload) {
   boardElement.style.setProperty("--board-column-count", String(payload.config.statuses.length));
   const projectName = document.querySelector("#project-name");
   if (projectName) projectName.textContent = payload.config.projectName;
+  renderDependencySuggestions();
   createActionsElement.replaceChildren();
   for (const source of payload.config.sources) {
     const button = document.createElement("button");
@@ -1062,6 +1206,35 @@ document.querySelector("#clear-filters").addEventListener("click", () => {
 });
 document.querySelector("#collapse-all").addEventListener("click", () => setAllCardsCollapsed(true));
 document.querySelector("#expand-all").addEventListener("click", () => setAllCardsCollapsed(false));
+dependencySuggestionsButton.addEventListener("click", () => {
+  dependencySuggestionsExpanded = !dependencySuggestionsExpanded;
+  renderDependencySuggestions();
+});
+dependencySuggestionsList.addEventListener("click", (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest("button[data-suggestion-action]")
+    : null;
+  if (!button) return;
+
+  const suggestion = boardSnapshot?.dependencySuggestions.find(({ id }) => id === button.dataset.suggestionId);
+  if (!suggestion) {
+    dependencySuggestionsStatus.textContent = "This suggestion is no longer available. Refresh the board.";
+    return;
+  }
+  if (button.dataset.suggestionAction === "dismiss") {
+    dismissedSuggestionIds.add(suggestion.id);
+    const persisted = persistDismissedSuggestionIds();
+    renderDependencySuggestions();
+    if (persisted) dependencySuggestionsStatus.textContent = "Suggestion dismissed in this browser.";
+    return;
+  }
+  if (button.dataset.suggestionAction === "approve") {
+    button.disabled = true;
+    void approveDependencySuggestion(suggestion).finally(() => {
+      if (button.isConnected) button.disabled = false;
+    });
+  }
+});
 orderingHint.hidden = true;
 createActionsElement.addEventListener("click", (event) => {
   const button = event.target.closest("[data-create]");

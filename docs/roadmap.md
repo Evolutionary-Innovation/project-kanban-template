@@ -17,3 +17,5 @@ The template's task state is maintained in the table below. See [architecture](a
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RM-001 | Add installation checks for additional Copilot hosts | In Progress | High | 100 | Compatibility | Roadmap | Verify workspace extension loading behavior against supported host contracts. |  |  |  |  |  |  |  |  |  |
 | RM-002 | Add optional task-field display preferences | Future Ideas | Low | 200 | User experience | Roadmap | Consider only if real projects need per-field card summaries. |  |  |  |  |  |  |  |  |  |
+| RM-003 | Implement deterministic dependency suggestions | Complete | High | 200 | Workflow | Roadmap | Detect exact task IDs paired with explicit dependency phrases in configured narrative fields; present review suggestions separately from canonical dependencies and verify graph integrity. |  |  |  |  |  |  |  | 2026-11-03 | 2026-11-03 |
+<!-- project-kanban-id-sequence:RM:4 -->

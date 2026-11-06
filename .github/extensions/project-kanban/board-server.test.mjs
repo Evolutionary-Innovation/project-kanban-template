@@ -408,7 +408,7 @@ test("rejects cross-origin and non-JSON mutations before calling handlers", asyn
   assert.equal(called, false);
 });
 
-test("serves only allowlisted graph modules locally without mutations or relaxed script policy", async (context) => {
+test("serves only allowlisted board modules locally without mutations or relaxed script policy", async (context) => {
   let mutations = 0;
   const mutate = async () => { mutations += 1; return {}; };
   const handler = await createBoardRequestHandler({
@@ -423,7 +423,7 @@ test("serves only allowlisted graph modules locally without mutations or relaxed
   }));
   const origin = `http://127.0.0.1:${server.address().port}`;
   for (const asset of [
-    "board-graph.mjs", "board-graph-client.js", "board-graph-worker.mjs",
+    "board-client-interactions.mjs", "board-graph.mjs", "board-graph-client.js", "board-graph-worker.mjs",
     "vendor/dagre-3.1.3.mjs",
   ]) {
     const response = await fetch(`${origin}/${asset}?attempt=2`);

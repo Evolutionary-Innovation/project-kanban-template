@@ -135,7 +135,7 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Assumptions:** The one-time migration to canonical tables is complete. If an old-format document must be restored, its owning project can recover it from history and perform an explicit migration without changing the shared board runtime.
 - **Alternatives considered:** Keep Trade-MSTR-specific parsing in the Template, remove historical ID aliases with the adapter, or retain legacy-format inference in the generic CRUD path.
 - **Decision:** Restrict the shared runtime to configured schema-v1 tables and remove legacy adapter selection and automatic conversion. Keep `legacyIdPrefixes` as generic source configuration, independent of parsing, so historical task IDs and references remain valid. Any future legacy conversion must be an explicit utility owned by the project whose format it understands.
-- **Consequences:** No task-table schema or current task data changes are required. A non-canonical source now fails explicitly instead of being inferred or rewritten during a normal board mutation. Consumers adopting this runtime must remove obsolete `legacyAdapter` config fields; historical ID aliases remain supported.
+- **Consequences:** No task-table schema or current task data changes are required. A non-canonical source now fails explicitly instead of being inferred or rewritten during a normal board mutation. The deprecated `legacyAdapter` source field remains accepted as a validated no-op for configuration compatibility, but does not restore legacy parsing. Historical ID aliases remain supported.
 
 ## ADR-16: Template authority and release governance
 

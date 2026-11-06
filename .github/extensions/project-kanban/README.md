@@ -2,7 +2,7 @@
 
 The workspace canvas reads the Markdown sources listed in the repository-root `project-kanban.config.json`. Markdown remains authoritative; the canvas renders configured statuses as columns and persists mutations to each task's owning source.
 
-The common task fields are ID, Title, Status, Priority, Order, Area, Category, and Details. A source may configure additional fields. New projects should use canonical `## Kanban tasks` tables with the configured schema marker. The shared runtime reads configured schema-v1 tables only; legacy-format conversion belongs in an explicit project-owned migration utility, not a runtime adapter.
+The common task fields are ID, Title, Status, Priority, Order, Area, Category, and Details. A source may configure additional fields. New projects should use canonical `## Kanban tasks` tables with the configured schema marker. The shared runtime reads configured schema-v1 tables only. The deprecated `legacyAdapter` source field is accepted as a validated no-op for configuration compatibility; it does not enable legacy-format parsing, which belongs in an explicit project-owned migration utility.
 
 The canvas supports drag-and-drop, keyboard reordering, create, edit, confirmed delete, and refresh. Search covers IDs, titles, details, configured fields, and dependency references. Checkbox filters support multiple values for source, status, priority, category, area, and dependency state: selections within one filter use OR, while filter groups combine with AND. Removable filter chips make active selections visible. Filters and independent per-column view sorts keep tasks in their original status columns. Cards can be collapsed individually or as a group for the current canvas session.
 

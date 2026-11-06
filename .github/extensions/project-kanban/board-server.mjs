@@ -67,6 +67,7 @@ async function readAssets() {
     ["board.css", "text/css; charset=utf-8"],
     ["board-client.js", "text/javascript; charset=utf-8"],
     ["board-view.mjs", "text/javascript; charset=utf-8"],
+    ["board-client-interactions.mjs", "text/javascript; charset=utf-8"],
   ];
   const assets = new Map();
 
@@ -96,6 +97,7 @@ export async function createBoardRequestHandler({
     ["/board.css", "board.css"],
     ["/board-client.js", "board-client.js"],
     ["/board-view.mjs", "board-view.mjs"],
+    ["/board-client-interactions.mjs", "board-client-interactions.mjs"],
     ["/board-graph.mjs", "board-graph.mjs"],
     ["/board-graph-client.js", "board-graph-client.js"],
     ["/board-graph-worker.mjs", "board-graph-worker.mjs"],

@@ -21,7 +21,7 @@ Versioned releases and the consumer adoption contract are documented in [release
 - Example roadmap, technical-debt register, and repository audit documents.
 - An independent example project with different source paths, statuses, priorities, prefixes, and fields.
 - An isolated synthetic browser project with 60 fictional records for UX testing; its local server writes only to fixture documents.
-- Runtime parsing is limited to configured schema-v1 task tables. Historical ID prefixes remain configurable; legacy-format conversion belongs in an explicit tool owned by the project whose documents need conversion.
+- Runtime parsing is limited to configured schema-v1 task tables. Historical ID prefixes remain configurable. The deprecated `legacyAdapter` source field is accepted as a validated no-op for configuration compatibility; it does not enable legacy-format parsing, which belongs in an explicit tool owned by the project whose documents need conversion.
 
 ## Start here
 

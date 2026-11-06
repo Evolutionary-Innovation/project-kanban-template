@@ -107,11 +107,14 @@ function validateSource(source, sourceKeys, paths, prefixes) {
     source,
     "Task source",
     ["key", "label", "path", "idPrefix", "idWidth", "category", "categoryTone"],
-    ["extraFields", "legacyIdPrefixes"],
+    ["extraFields", "legacyIdPrefixes", "legacyAdapter"],
   );
   const key = requireText(source.key, "Source key", 64);
   if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || sourceKeys.has(key)) {
     throw new TypeError(`Source key "${key}" is invalid or duplicated.`);
+  }
+  if (source.legacyAdapter !== undefined) {
+    requireText(source.legacyAdapter, `legacyAdapter for "${key}"`, 64);
   }
   sourceKeys.add(key);
 

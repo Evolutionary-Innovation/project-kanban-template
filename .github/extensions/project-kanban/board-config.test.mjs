@@ -49,15 +49,16 @@ test("validates an independent project with unrelated paths, prefixes, statuses,
   assert.equal(config.completionStatus, "Done");
 });
 
-test("keeps historical ID prefixes independent of parser selection", () => {
+test("accepts legacyAdapter as a deprecated no-op independent of historical ID prefixes", () => {
   const raw = testConfig();
   raw.sources[2].legacyIdPrefixes = ["OLD"];
+  raw.sources[2].legacyAdapter = "trade-mstr-v1";
   const config = validateBoardConfig(raw, "/workspace");
 
   assert.deepEqual(config.sources[2].legacyIdPrefixes, ["OLD"]);
   assert.equal("legacyAdapter" in config.sources[2], false);
 
-  const obsoleteAdapter = structuredClone(raw);
-  obsoleteAdapter.sources[2].legacyAdapter = "trade-mstr-v1";
-  assert.throws(() => validateBoardConfig(obsoleteAdapter, "/workspace"), /missing or unsupported/);
+  const invalidAdapter = structuredClone(raw);
+  invalidAdapter.sources[2].legacyAdapter = { name: "legacy" };
+  assert.throws(() => validateBoardConfig(invalidAdapter, "/workspace"), /legacyAdapter/);
 });

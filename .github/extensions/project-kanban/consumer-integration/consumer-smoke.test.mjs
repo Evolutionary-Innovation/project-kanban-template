@@ -21,7 +21,6 @@ test("loads and writes only a disposable copy of a configured consumer workspace
   const configPath = join(consumerRoot, "project-kanban.config.json");
   const originalConfig = await readFile(configPath);
   const rawConfig = JSON.parse(originalConfig.toString("utf8"));
-  for (const source of rawConfig.sources) delete source.legacyAdapter;
   const consumerConfig = validateBoardConfig(rawConfig, consumerRoot);
   const originalSources = new Map(
     await Promise.all(consumerConfig.sources.map(async (source) => [

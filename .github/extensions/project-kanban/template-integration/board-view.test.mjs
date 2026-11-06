@@ -192,6 +192,26 @@ test("sorts without mutating canonical order and keeps blank dates last", async 
       return left.localeCompare(right);
     }));
     assert.equal(dates.at(-1), "");
+
+    const descendingSorted = sortTasks(withUnknownDate, board.config, `${dateField}Descending`);
+    const descendingDates = descendingSorted.map((task) => task[dateField] || "");
+    const populatedDescendingDates = descendingDates.filter(Boolean);
+    assert.deepEqual(
+      populatedDescendingDates,
+      [...populatedDescendingDates].sort((left, right) => right.localeCompare(left)),
+    );
+    assert.equal(descendingDates.at(-1), "");
+
+    const tiedDateTasks = complete.slice(0, 3).map((task) => ({
+      ...task,
+      [dateField]: "2026-01-02",
+    }));
+    for (const sortDirection of [dateField, `${dateField}Descending`]) {
+      assert.deepEqual(
+        sortTasks(tiedDateTasks, board.config, sortDirection).map(({ id }) => id),
+        sortTasks(tiedDateTasks, board.config, "manual").map(({ id }) => id),
+      );
+    }
   }
   assert.deepEqual(board.columns.find(({ status }) => status === "Complete").cards.map(({ id }) => id), originalIds);
   assert.deepEqual(sortTasks(complete, board.config, "manual").map(({ id }) => id), originalIds);

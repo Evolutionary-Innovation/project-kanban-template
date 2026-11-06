@@ -706,10 +706,12 @@ function renderColumns(columns) {
       ["area", "Area"],
     ];
     if (boardSnapshot.config.sources.some(({ extraFields }) => extraFields.some(({ key }) => key === "completionDate"))) {
-      sortOptions.push(["completionDate", "Completion date"]);
+      sortOptions.push(["completionDate", "Completion date (oldest first)"]);
+      sortOptions.push(["completionDateDescending", "Completion date (newest first)"]);
     }
     if (boardSnapshot.config.sources.some(({ extraFields }) => extraFields.some(({ key }) => key === "createdDate"))) {
-      sortOptions.push(["createdDate", "Created date"]);
+      sortOptions.push(["createdDate", "Created date (oldest first)"]);
+      sortOptions.push(["createdDateDescending", "Created date (newest first)"]);
     }
     const selectedSort = sortByStatus.get(column.status) ?? "manual";
     for (const [value, label] of sortOptions) {

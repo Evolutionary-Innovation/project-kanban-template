@@ -252,12 +252,13 @@ export function calculateOrderValue(tasks, taskId, status, requestedIndex, confi
   return order;
 }
 
-function compareOptionalText(left, right, key) {
+function compareOptionalText(left, right, key, direction = "ascending") {
   const leftValue = String(left[key] ?? "");
   const rightValue = String(right[key] ?? "");
   if (!leftValue && rightValue) return 1;
   if (leftValue && !rightValue) return -1;
-  return leftValue.localeCompare(rightValue, undefined, { sensitivity: "base" });
+  const comparison = leftValue.localeCompare(rightValue, undefined, { sensitivity: "base" });
+  return direction === "descending" ? -comparison : comparison;
 }
 
 export function sortTasks(tasks, config, sortBy = "manual") {
@@ -282,7 +283,11 @@ export function sortTasks(tasks, config, sortBy = "manual") {
       canonical(left, right),
     completionDate: (left, right) =>
       compareOptionalText(left, right, "completionDate") || canonical(left, right),
+    completionDateDescending: (left, right) =>
+      compareOptionalText(left, right, "completionDate", "descending") || canonical(left, right),
     createdDate: (left, right) => compareOptionalText(left, right, "createdDate") || canonical(left, right),
+    createdDateDescending: (left, right) =>
+      compareOptionalText(left, right, "createdDate", "descending") || canonical(left, right),
   };
   return [...tasks].sort(comparators[sortBy] ?? canonical);
 }

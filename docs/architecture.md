@@ -34,6 +34,8 @@ CRUD and status/order changes go through the local HTTP server or SDK action. St
 
 The runtime parses only configured schema-v1 task tables. Configured historical ID prefixes extend task-ID validation independently of source parsing. Legacy-format conversion is not part of the shared runtime; any required migration belongs in an explicit utility owned by the project whose documents need conversion.
 
+The Template owns generic runtime behavior and its reusable tests; each consumer owns its configuration, task sources, project documentation, and domain integrations. Consumer adoption is a reviewed, version-pinned sync of the release's explicit runtime payload, never a replacement of consumer data. The [release governance contract](release-governance.md) defines the ownership boundary, compatibility claims, and rollback process.
+
 ## Secondary dependency graph
 
 Kanban is the default view. The secondary Dependencies view uses only the existing canonical `dependencyGraph` and task-by-ID snapshot, not suggestions, another dependency calculation, or another stored representation. It shows every task, including isolated tasks, and creates labelled placeholders for unresolved references. Edges always run from prerequisite to dependent. Blocker styling comes from existing `dependencyView.blockedBy`; cycle task flags are displayed without inventing precise cycle-edge membership.

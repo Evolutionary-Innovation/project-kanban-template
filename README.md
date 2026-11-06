@@ -1,6 +1,8 @@
-# Project Kanban Template v2.1.0
+# Project Kanban Template
 
 A GitHub repository template for a Markdown-backed project-management canvas. Copy it into a project rather than installing a shared runtime dependency.
+
+Versioned releases and the consumer adoption contract are documented in [release governance](docs/release-governance.md); see [GitHub Releases](https://github.com/Evolutionary-Innovation/project-kanban-template/releases) for published versions.
 
 ## What it provides
 

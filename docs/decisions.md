@@ -136,3 +136,21 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Keep Trade-MSTR-specific parsing in the Template, remove historical ID aliases with the adapter, or retain legacy-format inference in the generic CRUD path.
 - **Decision:** Restrict the shared runtime to configured schema-v1 tables and remove legacy adapter selection and automatic conversion. Keep `legacyIdPrefixes` as generic source configuration, independent of parsing, so historical task IDs and references remain valid. Any future legacy conversion must be an explicit utility owned by the project whose format it understands.
 - **Consequences:** No task-table schema or current task data changes are required. A non-canonical source now fails explicitly instead of being inferred or rewritten during a normal board mutation. Consumers adopting this runtime must remove obsolete `legacyAdapter` config fields; historical ID aliases remain supported.
+
+## ADR-16: Template authority and release governance
+
+- **Status:** Accepted
+- **Observations:** Generic runtime behavior and reusable tests are maintained in the Template, while consumers own project configuration, Markdown task data, documentation, and domain integrations. Unreviewed snapshots and permanent consumer patches create behavioral drift and obscure provenance.
+- **Assumptions:** Consumers can adopt a pinned release by syncing an explicit runtime payload and validating it in a disposable copy without replacing project-owned files.
+- **Alternatives considered:** Treat each consumer as an independent implementation, synchronize the full Template repository, or leave release and rollback behavior to undocumented convention.
+- **Decision:** Make the Template the sole authority for generic runtime, tests, architecture, decisions, release tags, and release notes. Consumers adopt only published immutable releases through an exact diff, preserve their project-owned content, and maintain one provenance record. Generic fixes are Template-first; emergency consumer patches must be minimal, documented, and reconciled with the next applicable release.
+- **Consequences:** Releases state schema/config compatibility and explicitly verified host scope. Consumer compatibility is not inferred from repository similarity. Release and synchronization gates are reproducible, while project-specific tasks and integrations remain consumer-owned. See [release governance](release-governance.md).
+
+## ADR-17: Resolve workspace and lock identity from the project root
+
+- **Status:** Accepted
+- **Observations:** Extension installation paths can vary across repositories and nesting layouts. The Copilot canvas may provide a workspace working directory; otherwise the canonical `project-kanban.config.json` is the authoritative identity. Storage already roots the exclusive lock at the resolved workspace, so independent runtime copies targeting one project share a lock while separate workspaces remain isolated.
+- **Assumptions:** A bounded ancestor search from the extension or host-provided directory can resolve a unique valid project root. Missing, invalid, or ambiguous roots must fail explicitly rather than selecting an implicit current directory.
+- **Alternatives considered:** Infer the root from repository or extension names, assume a fixed parent depth, use `process.cwd()`, place locks beside each runtime copy, or add configurable lock identity without a demonstrated need.
+- **Decision:** Prefer the host-provided workspace directory when available; otherwise use bounded canonical-config discovery. Reject missing, invalid, or ambiguous roots and pass the resolved root through runtime components. Derive lock identity from that workspace root, not from the extension installation location; preserve the established lock path and transaction behavior.
+- **Consequences:** Renaming a repository or relocating the extension does not change workspace identity. Runtime copies for one workspace coordinate through the same exclusive lock, and separate workspaces remain isolated. Schema v1, revision checks, atomic replacement, conflict behavior, and fail-closed handling of an abandoned lock remain unchanged. See [architecture](architecture.md#data-flow) and the [release governance contract](release-governance.md).

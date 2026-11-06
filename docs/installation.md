@@ -9,6 +9,12 @@
 5. Create each configured Markdown source with a `## Kanban tasks` section, the configured schema marker, and the required columns.
 6. Open the repository in a Copilot host that loads workspace extensions. The extension is located at `.github/extensions/project-kanban/extension.mjs`.
 
+## Host support and releases
+
+The currently verified host is the VS Code Copilot SDK canvas host exercised in this workspace. The exact host build was not captured during this assessment and must be recorded when validating a release candidate. Any other host or host/version combination is not yet validated and has no compatibility guarantee until explicitly tested and listed in a release. Support is never inferred from SDK similarity.
+
+The first authoritative release may be scoped to the verified host; additional-host work tracked by RM-001 and RA-001 remains open and does not block that limited scope. See the [release and consumer synchronisation contract](release-governance.md) for versioning, validation, adoption, and rollback.
+
 The extension reads and writes only the configured workspace-relative Markdown files. It stores no task database or private board state.
 
 At canvas open, the extension uses the Copilot session working directory when the host supplies it. Otherwise, it searches up from the extension's real location for a unique `project-kanban.config.json`, within a bounded depth of 64 directories. Missing, invalid, or ambiguous configuration is reported explicitly; the extension does not fall back to the process working directory. Alternate extension nesting is supported.

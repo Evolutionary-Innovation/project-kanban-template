@@ -14,11 +14,11 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 ## ADR-02: Isolate synthetic browser-test records
 
 - **Status:** Accepted
-- **Observations:** The template's root Markdown task registers are authoritative and may contain real project work or audit evidence. Browser UX checks need a larger, repeatable dataset.
-- **Assumptions:** A fixture-specific local server can use the existing generic parser and storage modules while rooting all writes within the fixture directory.
-- **Alternatives considered:** Add fictional entries to the root task registers or create ephemeral test rows in a browser-only mock.
-- **Decision:** Keep 60 fictional records in a separate configured project and run new browser/UX checks against it. Its local server loads and writes only the fixture's Markdown files.
-- **Consequences:** Test data exercises real parsing and persistence code without polluting or mutating canonical project records. The fixture is explicitly marked as synthetic.
+- **Observations:** Root Markdown registers are authoritative project data, while generic extension contracts must run independently of any repository's task rows or example paths. Browser UX checks need a larger, repeatable dataset.
+- **Assumptions:** Generic contract tests can generate deterministic schema-v1 workspaces in temporary directories, and a fixture-specific local server can root browser writes within the synthetic project.
+- **Alternatives considered:** Read live root registers, add fictional entries to canonical task documents, create browser-only mocks, or make consumers depend on Template examples.
+- **Decision:** Use generated temporary workspaces for generic contracts; keep Template sample and synthetic-project integration tests separate; run browser/UX checks only against the isolated 60-record synthetic project. Consumer smoke tests must copy configured sources into a temporary workspace before writes, and legacy adapter checks remain isolated with the adapter.
+- **Consequences:** Generic tests validate reusable behavior without project data. Template integration retains real parser/config coverage, consumer smoke validates source wiring without mutating consumer documents, and the synthetic fixture remains dedicated to Template browser verification.
 
 ## ADR-03: Keep per-source task ID high-water marks in Markdown
 

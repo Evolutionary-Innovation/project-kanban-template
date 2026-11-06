@@ -7,8 +7,8 @@ import {
   createTaskInDocuments,
   editTaskInDocuments,
   readBoardSnapshot,
-} from "./board-storage.mjs";
-import { readBoardConfig } from "./board-config.mjs";
+} from "../../board-storage.mjs";
+import { readBoardConfig } from "../../board-config.mjs";
 
 const roadmap = `# Roadmap
 ## Completed

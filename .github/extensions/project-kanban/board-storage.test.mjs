@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   createTaskInDocuments,
@@ -13,25 +12,22 @@ import {
   BoardStorageError,
 } from "./board-storage.mjs";
 import { updateTaskRecord } from "./board-data.mjs";
-import { readBoardConfig } from "./board-config.mjs";
-
-const templateRoot = fileURLToPath(new URL("../../../", import.meta.url));
+import { createTestWorkspace, independentTestConfig } from "./test-fixtures.mjs";
 
 function todayDateOnly() {
   const now = new Date();
   return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-async function createWorkspace(t, sourceRoot = templateRoot) {
-  const root = await mkdtemp(join(tmpdir(), "project-kanban-template-test-"));
-  await cp(join(sourceRoot, "project-kanban.config.json"), join(root, "project-kanban.config.json"));
-  await cp(join(sourceRoot, "docs"), join(root, "docs"), { recursive: true });
-  t.after(() => rm(root, { recursive: true, force: true }));
-  return { root, config: await readBoardConfig(root) };
+async function createWorkspace(t, config = undefined) {
+  return createTestWorkspace(t, config);
 }
 
 test("persists Roadmap, Technical Debt, and Audit mutations to their configured Markdown sources", async (t) => {
   const { root, config } = await createWorkspace(t);
+  const roadmapPath = join(root, config.sources.find(({ key }) => key === "roadmap").path);
+  const debtPath = join(root, config.sources.find(({ key }) => key === "technicalDebt").path);
+  const auditPath = join(root, config.sources.find(({ key }) => key === "repositoryAudit").path);
   let board = await readBoardSnapshot(root, config);
   const createdRoadmap = await createTaskInDocuments(root, config, {
     sourceType: "roadmap",
@@ -78,9 +74,9 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
   });
   assert.ok(createdAudit.tasks.some(({ id }) => id === "RA-002"));
 
-  const roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  const roadmapText = await readFile(roadmapPath, "utf8");
   assert.match(roadmapText, new RegExp(`\\| ${generatedRoadmapTask.id} \\| Test a generated starter \\|`));
-  const debtText = await readFile(join(root, "docs/technical-debt.md"), "utf8");
+  const debtText = await readFile(debtPath, "utf8");
   assert.match(debtText, /\| TD-02 \| Reduce repeated configuration \|/);
   assert.match(debtText, /Keep only values needed by real projects/);
 
@@ -97,13 +93,14 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
     revisions: edited.revisions,
   });
   assert.ok(!deleted.tasks.some(({ id }) => id === "RA-002"));
-  const auditText = await readFile(join(root, "docs/repository-audit.md"), "utf8");
-  assert.match(auditText, /This starter audit demonstrates preserving evidence/);
+  const auditText = await readFile(auditPath, "utf8");
+  assert.match(auditText, /The fixture narrative is preserved outside the task table/);
   assert.doesNotMatch(auditText, /\| RA-002 \|/);
 });
 
 test("keeps source task IDs monotonic when the highest ID is deleted", async (t) => {
   const { root, config } = await createWorkspace(t);
+  const roadmapPath = join(root, config.sources.find(({ key }) => key === "roadmap").path);
   let board = await readBoardSnapshot(root, config);
   board = await deleteTaskInDocuments(root, config, {
     taskId: "RM-003",
@@ -111,7 +108,7 @@ test("keeps source task IDs monotonic when the highest ID is deleted", async (t)
     revisions: board.revisions,
   });
 
-  let roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  let roadmapText = await readFile(roadmapPath, "utf8");
   assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:4 -->/);
   board = await createTaskInDocuments(root, config, {
     sourceType: "roadmap",
@@ -143,7 +140,7 @@ test("keeps source task IDs monotonic when the highest ID is deleted", async (t)
     revisions: board.revisions,
   });
   assert.ok(board.tasks.some(({ id }) => id === "RM-005"));
-  roadmapText = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  roadmapText = await readFile(roadmapPath, "utf8");
   assert.match(roadmapText, /<!-- project-kanban-id-sequence:RM:6 -->/);
 });
 
@@ -386,8 +383,7 @@ test("rejects malformed, duplicate, and self-referential dependencies on task cr
 });
 
 test("uses the independent project's configured IDs, statuses, and required extra fields", async (t) => {
-  const exampleRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
-  const { root, config } = await createWorkspace(t, exampleRoot);
+  const { root, config } = await createWorkspace(t, independentTestConfig());
   const board = await readBoardSnapshot(root, config);
   assert.equal(board.tasks.find(({ id }) => id === "EXP-001").createdDate, "");
   const created = await createTaskInDocuments(root, config, {
@@ -426,6 +422,7 @@ test("uses the independent project's configured IDs, statuses, and required extr
 
 test("moves tasks and rejects stale revisions without overwriting newer Markdown", async (t) => {
   const { root, config } = await createWorkspace(t);
+  const roadmapPath = join(root, config.sources.find(({ key }) => key === "roadmap").path);
   const snapshot = await readBoardSnapshot(root, config);
   const moved = await moveTaskInDocuments(root, config, {
     taskId: "RM-001",
@@ -435,8 +432,8 @@ test("moves tasks and rejects stale revisions without overwriting newer Markdown
   });
   assert.equal(moved.tasks.find(({ id }) => id === "RM-001").order, 300);
 
-  await writeFile(join(root, "docs/roadmap.md"), `${await readFile(join(root, "docs/roadmap.md"), "utf8")}\nExternal edit.\n`);
-  const current = await readFile(join(root, "docs/roadmap.md"), "utf8");
+  await writeFile(roadmapPath, `${await readFile(roadmapPath, "utf8")}\nExternal edit.\n`);
+  const current = await readFile(roadmapPath, "utf8");
   await assert.rejects(
     moveTaskInDocuments(root, config, {
       taskId: "RM-002",
@@ -446,7 +443,7 @@ test("moves tasks and rejects stale revisions without overwriting newer Markdown
     }),
     (error) => error instanceof BoardStorageError && error.code === "board_revision_conflict",
   );
-  assert.equal(await readFile(join(root, "docs/roadmap.md"), "utf8"), current);
+  assert.equal(await readFile(roadmapPath, "utf8"), current);
 });
 
 test("serializes writes with the exclusive workspace lock", async (t) => {
@@ -475,12 +472,13 @@ test("serializes writes with the exclusive workspace lock", async (t) => {
 
 test("rejects configured source symlinks that resolve outside the workspace", async (t) => {
   const { root, config } = await createWorkspace(t);
+  const roadmapPath = join(root, config.sources.find(({ key }) => key === "roadmap").path);
   const outsideRoot = await mkdtemp(join(tmpdir(), "project-kanban-outside-test-"));
   t.after(() => rm(outsideRoot, { recursive: true, force: true }));
   const outsideFile = join(outsideRoot, "roadmap.md");
   await writeFile(outsideFile, "# External roadmap\n");
-  await rm(join(root, "docs/roadmap.md"));
-  await symlink(outsideFile, join(root, "docs/roadmap.md"));
+  await rm(roadmapPath);
+  await symlink(outsideFile, roadmapPath);
 
   await assert.rejects(
     readBoardSnapshot(root, config),

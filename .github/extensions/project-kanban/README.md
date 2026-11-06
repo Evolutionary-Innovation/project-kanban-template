@@ -46,6 +46,26 @@ See the repository [installation guide](../../../docs/installation.md) and [docu
 
 ## Local checks
 
+Run from the installed extension directory. The same command works when the extension lives under a differently named consumer directory:
+
 ```sh
-node --test .github/extensions/project-kanban/*.test.mjs .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
+node --test *.test.mjs
+```
+
+The generic contract suite uses generated temporary workspaces and does not read repository task registers or Template example-project fixtures. From the Template repository root, run example-project integration tests separately:
+
+```sh
+node --test .github/extensions/project-kanban/template-integration/*.test.mjs
+```
+
+For a consumer integration smoke test, set `KANBAN_CONSUMER_ROOT` to a consumer checkout. The test copies its config and configured source documents into a temporary workspace before writing:
+
+```sh
+KANBAN_CONSUMER_ROOT=/path/to/consumer node --test .github/extensions/project-kanban/consumer-integration/*.test.mjs
+```
+
+Legacy adapter tests are an isolated compatibility suite:
+
+```sh
+node --test .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
 ```

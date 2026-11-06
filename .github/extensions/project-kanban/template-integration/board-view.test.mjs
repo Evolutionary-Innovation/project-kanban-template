@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { readBoardConfig } from "./board-config.mjs";
-import { parseBoardDocuments } from "./board-data.mjs";
+import { readBoardConfig } from "../board-config.mjs";
+import { parseBoardDocuments } from "../board-data.mjs";
 import {
   calculateOrderValue,
   filterTasks,
@@ -14,9 +14,9 @@ import {
   hasActiveTaskFilters,
   isManualOrderView,
   sortTasks,
-} from "./board-view.mjs";
+} from "../board-view.mjs";
 
-const fixtureRoot = fileURLToPath(new URL("../../../examples/synthetic-browser-project/", import.meta.url));
+const fixtureRoot = fileURLToPath(new URL("../../../../examples/synthetic-browser-project/", import.meta.url));
 
 async function loadFixture(root = fixtureRoot) {
   const config = await readBoardConfig(root);
@@ -139,7 +139,7 @@ test("derives dependency readiness without changing configured status or persist
     assert.equal(board.tasks.find((candidate) => candidate.id === id).dependencyView.isBlocked, true);
   }
 
-  const independentRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
+  const independentRoot = fileURLToPath(new URL("../../../../examples/independent-project/", import.meta.url));
   const independent = await loadFixture(independentRoot);
   const independentSummary = getWorkflowSummary(independent.tasks, independent.config);
   assert.equal(independent.config.completionStatus, "Done");

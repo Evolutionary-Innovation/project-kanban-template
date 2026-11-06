@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   BoardStorageError,
@@ -12,17 +8,11 @@ import {
   moveTaskInDocuments,
   readBoardSnapshot,
 } from "./board-storage.mjs";
-import { readBoardConfig } from "./board-config.mjs";
 import { createBoardRequestHandler } from "./board-server.mjs";
-
-const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+import { createTestWorkspace } from "./test-fixtures.mjs";
 
 async function createWorkspace(t) {
-  const root = await mkdtemp(join(tmpdir(), "project-kanban-api-test-"));
-  await cp(join(workspaceRoot, "project-kanban.config.json"), join(root, "project-kanban.config.json"));
-  await cp(join(workspaceRoot, "docs"), join(root, "docs"), { recursive: true });
-  t.after(() => rm(root, { recursive: true, force: true }));
-  return { root, config: await readBoardConfig(root) };
+  return createTestWorkspace(t);
 }
 
 test("serves mutation results and maps stale revisions to HTTP 409", async (context) => {

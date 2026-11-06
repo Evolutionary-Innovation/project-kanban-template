@@ -26,10 +26,28 @@ A GitHub repository template for a Markdown-backed project-management canvas. Co
 2. Edit `project-kanban.config.json` and the Markdown source documents.
 3. Keep the required task columns and schema marker aligned with the configuration.
 4. Read [installation instructions](docs/installation.md), [documentation standards](docs/documentation-standards.md), and project-specific [AGENTS.md](AGENTS.md).
-5. Run the tests:
+5. Run the generic contract tests:
 
    ```sh
-   node --test .github/extensions/project-kanban/*.test.mjs .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
+   node --test .github/extensions/project-kanban/*.test.mjs
+   ```
+
+   Template example-project integration tests are separate:
+
+   ```sh
+   node --test .github/extensions/project-kanban/template-integration/*.test.mjs
+   ```
+
+   To test a consumer without writing to its live task documents, run the disposable smoke test:
+
+   ```sh
+   KANBAN_CONSUMER_ROOT=/path/to/consumer node --test .github/extensions/project-kanban/consumer-integration/*.test.mjs
+   ```
+
+   Legacy-format adapter tests are isolated from the generic suite:
+
+   ```sh
+   node --test .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
    ```
 
 To try the board with representative browser-test data, run `node examples/synthetic-browser-project/serve.mjs` and open the loopback URL it prints. The fixture records are fictional and do not alter the template's actual task registers.

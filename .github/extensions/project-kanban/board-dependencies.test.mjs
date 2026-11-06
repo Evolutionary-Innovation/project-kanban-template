@@ -1,19 +1,20 @@
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { readBoardConfig } from "./board-config.mjs";
+import { validateBoardConfig } from "./board-config.mjs";
 import {
   analyzeDependencies,
   findDependencySuggestions,
   findIntroducedDependencyCycle,
   parseDependencyIds,
 } from "./board-dependencies.mjs";
+import { independentTestConfig, testConfig } from "./test-fixtures.mjs";
 
-const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const config = validateBoardConfig(testConfig());
+const roadmapPath = config.sources.find(({ key }) => key === "roadmap").path;
+const debtPath = config.sources.find(({ key }) => key === "technicalDebt").path;
+const auditPath = config.sources.find(({ key }) => key === "repositoryAudit").path;
 
-test("validates configured dependency ID formats and normalizes comma-separated IDs", async () => {
-  const config = await readBoardConfig(workspaceRoot);
-
+test("validates configured dependency ID formats and normalizes comma-separated IDs", () => {
   assert.deepEqual(parseDependencyIds(" TD-03, RM-019 ", config), ["TD-03", "RM-019"]);
   assert.deepEqual(parseDependencyIds("", config), []);
   assert.throws(() => parseDependencyIds("XX-001", config), /configured task ID prefix/);
@@ -21,15 +22,14 @@ test("validates configured dependency ID formats and normalizes comma-separated 
   assert.throws(() => parseDependencyIds("RM-019,,TD-03", config), /empty task ID/);
 });
 
-test("derives blockers and graph edges from stored Depends On relationships", async () => {
-  const config = await readBoardConfig(workspaceRoot);
+test("derives blockers and graph edges from stored Depends On relationships", () => {
   const tasks = [
-    { id: "TD-03", title: "Prerequisite", status: "In Progress", dependsOn: "", source: { document: "docs/technical-debt.md" } },
-    { id: "RM-019", title: "Dependent", status: "Planned", dependsOn: "TD-03, RA-005", source: { document: "docs/roadmap.md" } },
-    { id: "RA-005", title: "Completed prerequisite", status: "Complete", dependsOn: "", source: { document: "docs/repository-audit.md" } },
-    { id: "RM-020", title: "Unresolved dependency", status: "Planned", dependsOn: "TD-99", source: { document: "docs/roadmap.md" } },
-    { id: "RM-021", title: "Cycle A", status: "Planned", dependsOn: "RM-022", source: { document: "docs/roadmap.md" } },
-    { id: "RM-022", title: "Cycle B", status: "Planned", dependsOn: "RM-021", source: { document: "docs/roadmap.md" } },
+    { id: "TD-03", title: "Prerequisite", status: "In Progress", dependsOn: "", source: { document: debtPath } },
+    { id: "RM-019", title: "Dependent", status: "Planned", dependsOn: "TD-03, RA-005", source: { document: roadmapPath } },
+    { id: "RA-005", title: "Completed prerequisite", status: "Complete", dependsOn: "", source: { document: auditPath } },
+    { id: "RM-020", title: "Unresolved dependency", status: "Planned", dependsOn: "TD-99", source: { document: roadmapPath } },
+    { id: "RM-021", title: "Cycle A", status: "Planned", dependsOn: "RM-022", source: { document: roadmapPath } },
+    { id: "RM-022", title: "Cycle B", status: "Planned", dependsOn: "RM-021", source: { document: roadmapPath } },
   ];
   const { taskViews, graph } = analyzeDependencies(tasks, config);
 
@@ -42,8 +42,7 @@ test("derives blockers and graph edges from stored Depends On relationships", as
   assert.deepEqual(graph.cyclicTaskIds, ["RM-021", "RM-022"]);
 });
 
-test("suggests only exact task IDs paired with explicit dependency phrases", async () => {
-  const config = await readBoardConfig(workspaceRoot);
+test("suggests only exact task IDs paired with explicit dependency phrases", () => {
   const tasks = [
     {
       id: "RM-019",
@@ -51,42 +50,42 @@ test("suggests only exact task IDs paired with explicit dependency phrases", asy
       details: "This work depends on TD-03. It also mentions RA-005 and TD-0300.",
       evidence: "Blocked by RA-005; the narrative includes no other relationship.",
       dependsOn: "",
-      source: { document: "docs/roadmap.md" },
+      source: { document: roadmapPath },
     },
     {
       id: "TD-03",
       title: "Prerequisite debt task",
       details: "",
       dependsOn: "",
-      source: { document: "docs/technical-debt.md" },
+      source: { document: debtPath },
     },
     {
       id: "TD-030",
       title: "Longer ID",
       details: "",
       dependsOn: "",
-      source: { document: "docs/technical-debt.md" },
+      source: { document: debtPath },
     },
     {
       id: "RA-005",
       title: "Audit prerequisite",
       details: "",
       dependsOn: "",
-      source: { document: "docs/repository-audit.md" },
+      source: { document: auditPath },
     },
     {
       id: "RM-020",
       title: "Already canonical",
       details: "This is blocked by TD-03.",
       dependsOn: "TD-03",
-      source: { document: "docs/roadmap.md" },
+      source: { document: roadmapPath },
     },
     {
       id: "TD-04",
       title: "Unrelated task",
       details: "Reviewed RM-019 and requires completion of TD-0300.",
       dependsOn: "",
-      source: { document: "docs/technical-debt.md" },
+      source: { document: debtPath },
     },
   ];
 
@@ -125,8 +124,7 @@ test("suggests only exact task IDs paired with explicit dependency phrases", asy
   assert.equal(suggestions.some(({ dependentTaskId }) => dependentTaskId === "TD-04"), false);
 });
 
-test("supports explicit dependency phrase variants without title or bare-ID matching", async () => {
-  const config = await readBoardConfig(workspaceRoot);
+test("supports explicit dependency phrase variants without title or bare-ID matching", () => {
   const phrases = [
     ["requires", "The work requires RA-005.", 0.82],
     ["must complete first", "Must complete TD-03 first.", 0.95],
@@ -139,7 +137,7 @@ test("supports explicit dependency phrase variants without title or bare-ID matc
       title: "No title matching",
       details: phrases.map(([, text]) => text).join(" "),
       dependsOn: "",
-      source: { document: "docs/roadmap.md" },
+      source: { document: roadmapPath },
     },
     ...["TD-03", "TD-030", "RA-005", "RM-021"].map((id) => ({
       id,
@@ -163,11 +161,10 @@ test("supports explicit dependency phrase variants without title or bare-ID matc
   assert.ok(suggestions.every(({ prerequisiteTaskTitle }) => prerequisiteTaskTitle === "Prerequisite"));
 });
 
-test("rejects newly introduced cycles while permitting acyclic cross-source references", async () => {
-  const config = await readBoardConfig(workspaceRoot);
+test("rejects newly introduced cycles while permitting acyclic cross-source references", () => {
   const tasks = [
-    { id: "RM-019", dependsOn: "", source: { document: "docs/roadmap.md" } },
-    { id: "TD-03", dependsOn: "RM-019", source: { document: "docs/technical-debt.md" } },
+    { id: "RM-019", dependsOn: "", source: { document: roadmapPath } },
+    { id: "TD-03", dependsOn: "RM-019", source: { document: debtPath } },
   ];
 
   assert.deepEqual(findIntroducedDependencyCycle("RM-019", [], ["TD-03"], tasks, config), [
@@ -178,9 +175,8 @@ test("rejects newly introduced cycles while permitting acyclic cross-source refe
   assert.equal(findIntroducedDependencyCycle("RM-019", [], ["RA-005"], tasks, config), null);
 });
 
-test("dependency ID validation follows independent project prefixes", async () => {
-  const independentRoot = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
-  const config = await readBoardConfig(independentRoot);
+test("dependency ID validation follows independent project prefixes", () => {
+  const config = validateBoardConfig(independentTestConfig());
 
   assert.deepEqual(parseDependencyIds("PLAN-001, EXP-001", config), ["PLAN-001", "EXP-001"]);
   assert.throws(() => parseDependencyIds("RM-001", config), /configured task ID prefix/);

@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { readBoardConfig } from "./board-config.mjs";
-import { analyzeDependencies } from "./board-dependencies.mjs";
+import { readBoardConfig } from "../board-config.mjs";
+import { analyzeDependencies } from "../board-dependencies.mjs";
 import {
   createGraphView,
   findLongestDependencyChain,
@@ -13,12 +13,12 @@ import {
   graphTitleLines,
   layoutGraph,
   projectGraphView,
-} from "./board-graph.mjs";
-import { readBoardSnapshot } from "./board-storage.mjs";
-import { filterTasks } from "./board-view.mjs";
-import * as dagre from "./vendor/dagre-3.1.3.mjs";
+} from "../board-graph.mjs";
+import { readBoardSnapshot } from "../board-storage.mjs";
+import { filterTasks } from "../board-view.mjs";
+import * as dagre from "../vendor/dagre-3.1.3.mjs";
 
-const fixtureRoot = fileURLToPath(new URL("../../../examples/synthetic-browser-project/", import.meta.url));
+const fixtureRoot = fileURLToPath(new URL("../../../../examples/synthetic-browser-project/", import.meta.url));
 
 async function fixture() {
   return readBoardSnapshot(fixtureRoot, await readBoardConfig(fixtureRoot));
@@ -210,7 +210,7 @@ test("lays out chains, diamonds, disconnected components and cycles while retain
 test("supports empty graphs, independent configuration, isolated tasks and compact titles", async () => {
   const empty = { nodes: [], edges: [] };
   assert.deepEqual(layoutGraph(empty, dagre), { nodes: [], edges: [], width: 0, height: 0 });
-  const root = fileURLToPath(new URL("../../../examples/independent-project/", import.meta.url));
+  const root = fileURLToPath(new URL("../../../../examples/independent-project/", import.meta.url));
   const snapshot = await readBoardSnapshot(root, await readBoardConfig(root));
   const view = createGraphView(snapshot);
   assert.ok(view.nodes.some(({ id }) => id.startsWith("PLAN-")));
@@ -269,7 +269,7 @@ test("pinned standalone vendor and licence notices retain their reviewed bytes",
     ["dagre-LICENSE", "6a349742a6cb219d5a2fc8d0844f6d89a6efc62e20c664450d884fc7ff2d6015"],
     ["graphlib-LICENSE", "6a349742a6cb219d5a2fc8d0844f6d89a6efc62e20c664450d884fc7ff2d6015"],
   ]) {
-    const bytes = await readFile(new URL(`./vendor/${name}`, import.meta.url));
+    const bytes = await readFile(new URL(`../vendor/${name}`, import.meta.url));
     assert.equal(createHash("sha256").update(bytes).digest("hex"), expected);
   }
   assert.equal(dagre.version, "3.1.3");

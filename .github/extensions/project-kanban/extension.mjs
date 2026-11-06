@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CanvasError, createCanvas, joinSession } from "@github/copilot-sdk/extension";
-import { readBoardConfig } from "./board-config.mjs";
 import { createBoardRequestHandler } from "./board-server.mjs";
 import {
   buildNextWorkPrompt,
@@ -19,127 +19,97 @@ import {
   moveTaskInDocuments,
   readBoardSnapshot,
 } from "./board-storage.mjs";
+import { resolveWorkspaceContext, WorkspaceDiscoveryError } from "./workspace-root.mjs";
 
-const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
+const extensionDirectory = dirname(fileURLToPath(import.meta.url));
 const serverByInstance = new Map();
-let config;
 
-try {
-  config = await readBoardConfig(workspaceRoot);
-} catch (error) {
-  const message = error instanceof Error ? error.message : "Unknown project config error.";
-  throw new CanvasError("board_config_invalid", message);
-}
-
-async function loadBoard() {
-  try {
-    return await readBoardSnapshot(workspaceRoot, config);
-  } catch (error) {
-    if (error instanceof BoardStorageError) throw new CanvasError(error.code, error.message);
-    throw error;
-  }
-}
-
-async function runStorageOperation(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    if (error instanceof BoardStorageError) throw new CanvasError(error.code, error.message);
-    throw error;
-  }
-}
-
-async function getPlanningContext(currentView) {
-  const [board, documents] = await Promise.all([
-    loadBoard(),
-    readPlanningDocuments(workspaceRoot),
-  ]);
-  return buildPlanningContext({ board, documents, currentView });
-}
-
-async function requestNextWork(currentView) {
-  const context = await getPlanningContext(currentView);
-  const ui = copilotSession.rpc?.ui;
-  if (typeof ui?.ephemeralQuery !== "function") {
-    throw new PlanningError(
-      "planning_unavailable",
-      "The current Copilot host does not support transient planning queries.",
-    );
+function createRuntime(workspaceRoot, config) {
+  async function loadBoard() {
+    try {
+      return await readBoardSnapshot(workspaceRoot, config);
+    } catch (error) {
+      if (error instanceof BoardStorageError) throw new CanvasError(error.code, error.message);
+      throw error;
+    }
   }
 
-  const result = await ui.ephemeralQuery({ question: buildNextWorkPrompt(context) });
-  const plan = parsePlanningAnswer(result?.answer, context);
+  async function runStorageOperation(operation) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof BoardStorageError) throw new CanvasError(error.code, error.message);
+      throw error;
+    }
+  }
+
+  async function getPlanningContext(currentView) {
+    const [board, documents] = await Promise.all([
+      loadBoard(),
+      readPlanningDocuments(workspaceRoot),
+    ]);
+    return buildPlanningContext({ board, documents, currentView });
+  }
+
+  async function requestNextWork(currentView) {
+    const context = await getPlanningContext(currentView);
+    const ui = copilotSession.rpc?.ui;
+    if (typeof ui?.ephemeralQuery !== "function") {
+      throw new PlanningError(
+        "planning_unavailable",
+        "The current Copilot host does not support transient planning queries.",
+      );
+    }
+
+    const result = await ui.ephemeralQuery({ question: buildNextWorkPrompt(context) });
+    const plan = parsePlanningAnswer(result?.answer, context);
+    return {
+      contextGeneratedAt: context.generatedAt,
+      boardSnapshotAt: context.boardSnapshotAt,
+      coverage: buildPlanningCoverage(context),
+      plan,
+    };
+  }
+
   return {
-    contextGeneratedAt: context.generatedAt,
-    boardSnapshotAt: context.boardSnapshotAt,
-    coverage: buildPlanningCoverage(context),
-    plan,
+    workspaceRoot,
+    config,
+    loadBoard,
+    getPlanningContext,
+    requestNextWork,
+    moveTask: (input) => runStorageOperation(() => moveTaskInDocuments(workspaceRoot, config, input)),
+    createTask: (input) => runStorageOperation(() => createTaskInDocuments(workspaceRoot, config, input)),
+    editTask: (input) => runStorageOperation(() => editTaskInDocuments(workspaceRoot, config, input)),
+    deleteTask: (input) => runStorageOperation(() => deleteTaskInDocuments(workspaceRoot, config, input)),
   };
 }
 
-const moveTask = (input) =>
-  runStorageOperation(() => moveTaskInDocuments(workspaceRoot, config, input));
-const createTask = (input) =>
-  runStorageOperation(() => createTaskInDocuments(workspaceRoot, config, input));
-const editTask = (input) =>
-  runStorageOperation(() => editTaskInDocuments(workspaceRoot, config, input));
-const deleteTask = (input) =>
-  runStorageOperation(() => deleteTaskInDocuments(workspaceRoot, config, input));
-
-const revisionPaths = config.sources.map(({ path }) => path);
-const revisionSchema = {
+const taskIdSchema = { type: "string", pattern: "^[A-Z][A-Z0-9]*-\\d+$" };
+const revisionsSchema = {
   type: "object",
-  additionalProperties: false,
-  required: revisionPaths,
-  properties: Object.fromEntries(revisionPaths.map((path) => [path, { type: "string", pattern: "^[a-f0-9]{64}$" }])),
+  minProperties: 1,
+  additionalProperties: { type: "string", pattern: "^[a-f0-9]{64}$" },
 };
-const taskDraftSchemas = config.sources.map((source) => {
-  const extraProperties = Object.fromEntries(
-    source.extraFields.map((field) => [
-      field.key,
-      {
-        type: "string",
-        ...(field.required ? { minLength: 1 } : {}),
-        maxLength: field.maxLength,
-      },
-    ]),
-  );
-  return {
-    type: "object",
-    additionalProperties: false,
-    required: ["title", "area", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)],
-    properties: {
-      title: { type: "string", minLength: 1, maxLength: 200 },
-      area: { type: "string", minLength: 1, maxLength: 100 },
-      priority: { type: "string", enum: config.priorities.map(({ name }) => name) },
-      status: { type: "string", enum: config.statuses },
-      details: { type: "string", maxLength: 5000 },
-      ...extraProperties,
-    },
-  };
-});
-const editableProperties = Object.fromEntries([
-  ["title", { type: "string", minLength: 1, maxLength: 200 }],
-  ["status", { type: "string", enum: config.statuses }],
-  ["priority", { type: "string", enum: config.priorities.map(({ name }) => name) }],
-  ["area", { type: "string", minLength: 1, maxLength: 100 }],
-  ["category", { type: "string", minLength: 1, maxLength: 100 }],
-  ["details", { type: "string", maxLength: 5000 }],
-  ...config.sources.flatMap((source) =>
-    source.extraFields.map((field) => [
-      field.key,
-      {
-        type: "string",
-        ...(field.required ? { minLength: 1 } : {}),
-        maxLength: field.maxLength,
-      },
-    ]),
-  ),
-]);
-const taskIdPattern = `^(${config.sources.flatMap(({ idPrefix, idWidth, legacyIdPrefixes }) => [
-  `${idPrefix}-\\d{${idWidth},}`,
-  ...legacyIdPrefixes.map((prefix) => `${prefix}-\\d{2,6}`),
-]).join("|")})$`;
+const taskDraftSchema = {
+  type: "object",
+  additionalProperties: true,
+  required: ["title", "area", "priority", "status", "details"],
+  properties: {
+    title: { type: "string", minLength: 1, maxLength: 200 },
+    area: { type: "string", minLength: 1, maxLength: 100 },
+    priority: { type: "string", maxLength: 60 },
+    status: { type: "string", maxLength: 60 },
+    details: { type: "string", maxLength: 5000 },
+  },
+};
+const editableProperties = {
+  title: { type: "string", minLength: 1, maxLength: 200 },
+  status: { type: "string", maxLength: 60 },
+  priority: { type: "string", maxLength: 60 },
+  area: { type: "string", minLength: 1, maxLength: 100 },
+  category: { type: "string", minLength: 1, maxLength: 100 },
+  details: { type: "string", maxLength: 5000 },
+};
 
 function getInstanceKey(context) {
   if (
@@ -152,6 +122,18 @@ function getInstanceKey(context) {
     throw new CanvasError("board_instance_invalid", "A valid session and canvas instance ID are required.");
   }
   return `${context.sessionId}\u0000${context.instanceId}`;
+}
+
+function getRuntime(context) {
+  const record = serverByInstance.get(getInstanceKey(context));
+  if (!record) {
+    throw new CanvasError("board_instance_unavailable", "Open the canvas before invoking an action.");
+  }
+  return record.runtime;
+}
+
+function invokeWithRuntime(context, operation) {
+  return operation(getRuntime(context), context.input);
 }
 
 function listen(server) {
@@ -191,13 +173,13 @@ async function closeInstance(context) {
 
 const kanbanCanvas = createCanvas({
   id: "project-kanban-template",
-  displayName: config.boardTitle,
+  displayName: "Project Kanban",
   description: "Shows Markdown-backed project tasks grouped by configured status, priority, and category.",
   actions: [
     {
       name: "refreshBoard",
       description: "Re-read configured Markdown sources and return the current Kanban cards.",
-      handler: loadBoard,
+      handler: (context) => invokeWithRuntime(context, (runtime) => runtime.loadBoard()),
     },
     {
       name: "moveTask",
@@ -207,13 +189,13 @@ const kanbanCanvas = createCanvas({
         additionalProperties: false,
         required: ["taskId", "status", "order", "revisions"],
         properties: {
-          taskId: { type: "string", pattern: taskIdPattern },
-          status: { type: "string", enum: config.statuses },
+          taskId: taskIdSchema,
+          status: { type: "string", maxLength: 60 },
           order: { type: "number", minimum: 0 },
-          revisions: revisionSchema,
+          revisions: revisionsSchema,
         },
       },
-      handler: ({ input }) => moveTask(input),
+      handler: (context) => invokeWithRuntime(context, (runtime, input) => runtime.moveTask(input)),
     },
     {
       name: "createTask",
@@ -223,12 +205,12 @@ const kanbanCanvas = createCanvas({
         additionalProperties: false,
         required: ["sourceType", "task", "revisions"],
         properties: {
-          sourceType: { type: "string", enum: config.sources.map(({ key }) => key) },
-          task: { anyOf: taskDraftSchemas },
-          revisions: revisionSchema,
+          sourceType: { type: "string", maxLength: 64 },
+          task: taskDraftSchema,
+          revisions: revisionsSchema,
         },
       },
-      handler: ({ input }) => createTask(input),
+      handler: (context) => invokeWithRuntime(context, (runtime, input) => runtime.createTask(input)),
     },
     {
       name: "editTask",
@@ -238,17 +220,17 @@ const kanbanCanvas = createCanvas({
         additionalProperties: false,
         required: ["taskId", "updates", "revisions"],
         properties: {
-          taskId: { type: "string", pattern: taskIdPattern },
+          taskId: taskIdSchema,
           updates: {
             type: "object",
             minProperties: 1,
-            additionalProperties: false,
+            additionalProperties: true,
             properties: editableProperties,
           },
-          revisions: revisionSchema,
+          revisions: revisionsSchema,
         },
       },
-      handler: ({ input }) => editTask(input),
+      handler: (context) => invokeWithRuntime(context, (runtime, input) => runtime.editTask(input)),
     },
     {
       name: "deleteTask",
@@ -258,28 +240,39 @@ const kanbanCanvas = createCanvas({
         additionalProperties: false,
         required: ["taskId", "confirmed", "revisions"],
         properties: {
-          taskId: { type: "string", pattern: taskIdPattern },
+          taskId: taskIdSchema,
           confirmed: { const: true },
-          revisions: revisionSchema,
+          revisions: revisionsSchema,
         },
       },
-      handler: ({ input }) => deleteTask(input),
+      handler: (context) => invokeWithRuntime(context, (runtime, input) => runtime.deleteTask(input)),
     },
   ],
   open: async (context) => {
-    await loadBoard();
     const key = getInstanceKey(context);
     let record = serverByInstance.get(key);
 
     if (!record || !record.server.listening) {
+      let workspace;
+      try {
+        workspace = await resolveWorkspaceContext({
+          hostWorkingDirectory: context.session?.workingDirectory,
+          extensionDirectory,
+        });
+      } catch (error) {
+        if (error instanceof WorkspaceDiscoveryError) throw new CanvasError(error.code, error.message);
+        throw error;
+      }
+      const runtime = createRuntime(workspace.workspaceRoot, workspace.config);
+      await runtime.loadBoard();
       const handler = await createBoardRequestHandler({
-        loadBoard,
-        moveTask,
-        createTask,
-        editTask,
-        deleteTask,
-        getPlanningContext: () => getPlanningContext(),
-        requestNextWork,
+        loadBoard: runtime.loadBoard,
+        moveTask: runtime.moveTask,
+        createTask: runtime.createTask,
+        editTask: runtime.editTask,
+        deleteTask: runtime.deleteTask,
+        getPlanningContext: () => runtime.getPlanningContext(),
+        requestNextWork: runtime.requestNextWork,
       });
       const server = createServer(handler);
       try {
@@ -294,14 +287,16 @@ const kanbanCanvas = createCanvas({
         server.close();
         throw new CanvasError("board_server_address_unavailable", "The board server did not receive a local address.");
       }
-      record = { server, port: address.port };
+      record = { server, port: address.port, runtime };
       serverByInstance.set(key, record);
+    } else {
+      await record.runtime.loadBoard();
     }
 
     return {
       url: `http://127.0.0.1:${record.port}/`,
-      title: config.boardTitle,
-      status: `${config.projectName} task board loaded.`,
+      title: record.runtime.config.boardTitle,
+      status: `${record.runtime.config.projectName} task board loaded.`,
     };
   },
   onClose: closeInstance,

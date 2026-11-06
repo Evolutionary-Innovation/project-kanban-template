@@ -11,6 +11,8 @@
 
 The extension reads and writes only the configured workspace-relative Markdown files. It stores no task database or private board state.
 
+At canvas open, the extension uses the Copilot session working directory when the host supplies it. Otherwise, it searches up from the extension's real location for a unique `project-kanban.config.json`, within a bounded depth of 64 directories. Missing, invalid, or ambiguous configuration is reported explicitly; the extension does not fall back to the process working directory. Alternate extension nesting is supported.
+
 ## Install the portable global instructions
 
 `copilot-instructions.md` is intentionally project-independent, but a repository file cannot apply itself to every workspace. Copy or merge its contents into the user/global Copilot instructions supported by the host when cross-project behavior is desired. Keep project-specific architecture, task conventions, and implementation rules in `AGENTS.md`.

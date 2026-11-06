@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { readBoardConfig, validateBoardConfig } from "../board-config.mjs";
 import { createTaskInDocuments, readBoardSnapshot } from "../board-storage.mjs";
+import { resolveWorkspaceContext } from "../workspace-root.mjs";
 
 const consumerRoot = process.env.KANBAN_CONSUMER_ROOT
   ? resolve(process.env.KANBAN_CONSUMER_ROOT)
@@ -35,6 +37,13 @@ test("loads and writes only a disposable copy of a configured consumer workspace
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, contents);
   }
+
+  const resolvedWorkspace = await resolveWorkspaceContext({
+    hostWorkingDirectory: temporaryRoot,
+    extensionDirectory: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+  });
+  assert.equal(resolvedWorkspace.workspaceRoot, temporaryRoot);
+  assert.equal(resolvedWorkspace.config.projectName, rawConfig.projectName);
 
   const config = await readBoardConfig(temporaryRoot);
   const initial = await readBoardSnapshot(temporaryRoot, config);

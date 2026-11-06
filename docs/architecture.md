@@ -9,6 +9,7 @@ Project Kanban is a workspace-scoped Copilot canvas with a local HTTP board UI. 
 | Component | Responsibility | Owns |
 |---|---|---|
 | `project-kanban.config.json` | Validates project labels, sources, workflow values, ID prefixes, and typed extra fields | Project-specific board configuration |
+| `workspace-root.mjs` | Resolves the workspace from optional host context or bounded canonical-config discovery | Validated workspace root and config for each canvas instance |
 | `board-data.mjs` | Parses schema-v1 tables, normalizes configured columns on mutation, and builds status/dependency/suggestion projections | Markdown-to-task mapping and row edits |
 | `board-dependencies.mjs` | Parses configured task references, derives blocker state, detects cycles, exposes graph-ready nodes/edges, and discovers narrative dependency candidates | Pure canonical and suggestion analysis; no persistence |
 | `board-storage.mjs` | Reads snapshots and performs validated, revision-checked, locked single-source writes | Persistence transaction and conflict behavior |
@@ -17,9 +18,11 @@ Project Kanban is a workspace-scoped Copilot canvas with a local HTTP board UI. 
 | `board-graph.mjs` | Joins existing graph projection to tasks, constructs diagnostic placeholders, and adapts immutable inputs to layout | Pure graph presentation and layout |
 | `board-graph-client.js` and `board-graph-worker.mjs` | Render native SVG/HTML graph views and calculate positions in a local worker | Ephemeral selection, viewport and cached layout; no mutations |
 | `planning-context.mjs` | Builds a versioned read-only task/document context, extracts explicit goals, validates planning answers, and reports canonical dependency coverage | Planning data contract; no board writes |
-| `extension.mjs` | Registers SDK canvas actions, requests transient advice from the current session, and opens/closes per-instance local servers | Copilot host integration |
+| `extension.mjs` | Resolves and caches workspace config per canvas instance, registers SDK canvas actions, requests transient advice, and opens/closes local servers | Copilot host integration |
 
 ## Data flow
+
+At canvas open, the extension uses the optional `CanvasSessionContext.workingDirectory` supplied by the Copilot SDK. If that directory contains `project-kanban.config.json`, it is the explicit workspace root; otherwise discovery walks its ancestors. When host context is unavailable, the extension module's real directory is the search anchor. The bounded search accepts one config candidate and reports missing, invalid, or multiple candidates explicitly. It never uses `process.cwd()` or a fixed parent count. The resolved root and validated config are cached per canvas instance and passed into board, planning, and server operations. Since project configuration is not available until canvas open, registered action schemas are configuration-agnostic; the existing storage validators continue to enforce configured IDs, statuses, fields, sources, and revisions.
 
 Opening the canvas reads each configured source, parses its schema-v1 table, and returns tasks, configured columns, source paths, SHA-256 revisions, the canonical dependency graph, a separate dependency-suggestion projection, and a generation time. The client projects the snapshot into columns. Search includes task IDs and canonical dependency references. Checkbox filters allow multiple values per source, status, priority, category, area, and dependency-state group; selected values within a group use OR, while groups and search combine with AND. Removable chips expose individual active filter selections. Matching tasks remain in their original status columns. Each column can sort its view independently, including by category, area, and configured lifecycle dates. Cards lead with a display-only `ID: Title`, followed by category and area badges, populated configured detail sections, dependency relationships, and a subtle lifecycle footer. The display title removes configured source/category prefixes and duplicate IDs without modifying Markdown. Collapse hides content sections while retaining category/area, dependency summary, and known dates. Priority remains encoded by the card border; redundant status, priority, and source-filename labels are omitted. View state and collapsed-card IDs are held in memory and do not write Markdown.
 
@@ -52,9 +55,9 @@ SVG readability and layout cost depend on topology, not just task count. The 60-
 ## Test architecture
 
 - Generic extension contract tests live beside the modules and build deterministic workspaces under the system temporary directory. They do not read repository task registers or Template example-project paths.
-- Template integration tests live under `.github/extensions/project-kanban/template-integration/` and validate the default configuration, independent example, and synthetic browser project.
+- Workspace-root contract tests cover host context, extension-directory fallback, alternate nesting, ambiguous and invalid roots, symlinks, and the bounded search. Template integration tests live under `.github/extensions/project-kanban/template-integration/` and validate the real Template root, independent example, and synthetic browser project.
 - Consumer smoke tests are separate and opt-in. They copy the consumer config and configured source documents into a temporary workspace, exercise the normal storage path there, and verify that live consumer files remain unchanged.
-- Legacy-format adapter tests live with the adapter and run separately from generic contracts. New browser and UX verification uses only the Template synthetic browser project.
+- Legacy-format conversion is not part of the shared runtime; any consumer-owned migration tests remain with that consumer. New browser and UX verification uses only the Template synthetic browser project.
 
 ## Agent-assisted next-work planning
 

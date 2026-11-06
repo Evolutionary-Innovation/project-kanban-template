@@ -18,7 +18,7 @@ A GitHub repository template for a Markdown-backed project-management canvas. Co
 - Example roadmap, technical-debt register, and repository audit documents.
 - An independent example project with different source paths, statuses, priorities, prefixes, and fields.
 - An isolated synthetic browser project with 60 fictional records for UX testing; its local server writes only to fixture documents.
-- A Trade-MSTR v1 legacy adapter kept outside the generic parser. The Trade-MSTR checkout is not modified by this template.
+- Runtime parsing is limited to configured schema-v1 task tables. Historical ID prefixes remain configurable; legacy-format conversion belongs in an explicit tool owned by the project whose documents need conversion.
 
 ## Start here
 
@@ -42,12 +42,6 @@ A GitHub repository template for a Markdown-backed project-management canvas. Co
 
    ```sh
    KANBAN_CONSUMER_ROOT=/path/to/consumer node --test .github/extensions/project-kanban/consumer-integration/*.test.mjs
-   ```
-
-   Legacy-format adapter tests are isolated from the generic suite:
-
-   ```sh
-   node --test .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
    ```
 
 To try the board with representative browser-test data, run `node examples/synthetic-browser-project/serve.mjs` and open the loopback URL it prints. The fixture records are fictional and do not alter the template's actual task registers.

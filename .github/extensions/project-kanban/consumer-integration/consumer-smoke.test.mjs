@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { readBoardConfig } from "../board-config.mjs";
+import { readBoardConfig, validateBoardConfig } from "../board-config.mjs";
 import { createTaskInDocuments, readBoardSnapshot } from "../board-storage.mjs";
 
 const consumerRoot = process.env.KANBAN_CONSUMER_ROOT
@@ -16,9 +16,11 @@ function hash(contents) {
 }
 
 test("loads and writes only a disposable copy of a configured consumer workspace", { skip: !consumerRoot }, async (t) => {
-  const consumerConfig = await readBoardConfig(consumerRoot);
   const configPath = join(consumerRoot, "project-kanban.config.json");
   const originalConfig = await readFile(configPath);
+  const rawConfig = JSON.parse(originalConfig.toString("utf8"));
+  for (const source of rawConfig.sources) delete source.legacyAdapter;
+  const consumerConfig = validateBoardConfig(rawConfig, consumerRoot);
   const originalSources = new Map(
     await Promise.all(consumerConfig.sources.map(async (source) => [
       source.path,
@@ -27,7 +29,7 @@ test("loads and writes only a disposable copy of a configured consumer workspace
   );
   const temporaryRoot = await mkdtemp(join(tmpdir(), "project-kanban-consumer-smoke-"));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
-  await writeFile(join(temporaryRoot, "project-kanban.config.json"), originalConfig);
+  await writeFile(join(temporaryRoot, "project-kanban.config.json"), JSON.stringify(rawConfig, null, 2));
   for (const [path, contents] of originalSources) {
     const target = join(temporaryRoot, path);
     await mkdir(dirname(target), { recursive: true });
@@ -57,6 +59,22 @@ test("loads and writes only a disposable copy of a configured consumer workspace
   assert.ok(created);
   assert.equal(created.source.document, source.path);
   assert.equal((await readBoardSnapshot(temporaryRoot, config)).tasks.length, initial.tasks.length + 1);
+  const originalTasks = initial.tasks
+    .map(({ dependencyView, source: taskSource, ...task }) => ({
+      ...task,
+      source: taskSource.document,
+      dependencyView,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const preservedTasks = updated.tasks
+    .filter(({ title }) => title !== task.title)
+    .map(({ dependencyView, source: taskSource, ...task }) => ({
+      ...task,
+      source: taskSource.document,
+      dependencyView,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  assert.deepEqual(preservedTasks, originalTasks);
   assert.equal(hash(await readFile(configPath)), hash(originalConfig));
   for (const [path, contents] of originalSources) {
     assert.equal(hash(await readFile(join(consumerRoot, path))), hash(contents), `${path} must remain unchanged`);

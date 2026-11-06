@@ -11,7 +11,6 @@ Project Kanban is a workspace-scoped Copilot canvas with a local HTTP board UI. 
 | `project-kanban.config.json` | Validates project labels, sources, workflow values, ID prefixes, and typed extra fields | Project-specific board configuration |
 | `board-data.mjs` | Parses schema-v1 tables, normalizes configured columns on mutation, and builds status/dependency/suggestion projections | Markdown-to-task mapping and row edits |
 | `board-dependencies.mjs` | Parses configured task references, derives blocker state, detects cycles, exposes graph-ready nodes/edges, and discovers narrative dependency candidates | Pure canonical and suggestion analysis; no persistence |
-| `legacy-adapters.mjs` | Routes only explicitly configured legacy sources to their adapter | Legacy-format compatibility |
 | `board-storage.mjs` | Reads snapshots and performs validated, revision-checked, locked single-source writes | Persistence transaction and conflict behavior |
 | `board-server.mjs` | Serves the browser assets and same-origin JSON mutation routes | Local HTTP boundary |
 | `board-client.js` and `board-view.mjs` | Render cards, project search/filter/sort views, review dependency suggestions, present agent-assisted planning, and send user actions | Ephemeral browser view state and per-browser suggestion dismissals |
@@ -30,7 +29,7 @@ CRUD and status/order changes go through the local HTTP server or SDK action. St
 
 `createdDate` and `completionDate` are independent optional schema-v1 date extra fields. When configured, creation sets `createdDate` if absent; creation in or transition into the configured completion status sets or replaces `completionDate`, while reopening retains it. Status transitions are authoritative: entering the completion status overrides any supplied date with the current date, and leaving it preserves the stored date, including a historical blank. Manual corrections remain available when status is unchanged. The storage transaction validates new completion transitions without rejecting or backfilling existing historical blanks. A source-local ID high-water marker is initialized or advanced in the same write, outside the task table. A stale revision or held lock is surfaced as HTTP 409. Narrative text and other source documents are not rewritten.
 
-The generic parser handles only canonical schema-v1 task tables. Legacy inference is isolated in explicitly selected adapters.
+The runtime parses only configured schema-v1 task tables. Configured historical ID prefixes extend task-ID validation independently of source parsing. Legacy-format conversion is not part of the shared runtime; any required migration belongs in an explicit utility owned by the project whose documents need conversion.
 
 ## Secondary dependency graph
 
@@ -83,4 +82,4 @@ The browser-only synthetic test project under [`examples/synthetic-browser-proje
 - In the default template configuration, all three sources use the same schema-v1 columns. Extra fields are optional; older schema-v1 tables that omit configured optional columns load with blank values and acquire the configured columns on their next mutation. Store only `Depends On`; derive `Blocked By`. Keep dependency IDs project-configured and use the graph-ready `dependsOn` projection rather than persisting a second edge representation.
 - `Execution Type` is passive metadata. Agent/provider/model identity, automatic claiming, and status-triggered execution are outside the current architecture.
 - A source's ID sequence marker prevents reuse after it is established. When first initialized, it can only infer a safe next value from active rows; projects with pre-existing deletions must bootstrap it above the highest ID ever allocated because Markdown cannot reveal deleted history.
-- Keep the independent example configuration and explicit legacy adapter compatible.
+- Keep the independent example configuration compatible. Historical ID aliases are configuration metadata, not a parser-selection mechanism.

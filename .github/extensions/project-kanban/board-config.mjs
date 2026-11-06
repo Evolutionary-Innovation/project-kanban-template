@@ -107,7 +107,7 @@ function validateSource(source, sourceKeys, paths, prefixes) {
     source,
     "Task source",
     ["key", "label", "path", "idPrefix", "idWidth", "category", "categoryTone"],
-    ["extraFields", "legacyAdapter", "legacyIdPrefixes"],
+    ["extraFields", "legacyIdPrefixes"],
   );
   const key = requireText(source.key, "Source key", 64);
   if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || sourceKeys.has(key)) {
@@ -137,15 +137,9 @@ function validateSource(source, sourceKeys, paths, prefixes) {
   if (!Array.isArray(extraFields)) throw new TypeError(`Extra fields for "${key}" must be an array.`);
   const fieldKeys = new Set();
   const validatedFields = extraFields.map((field) => validateExtraField(field, key, fieldKeys));
-  if (source.legacyAdapter !== undefined && source.legacyAdapter !== "trade-mstr-v1") {
-    throw new TypeError(`Legacy adapter for "${key}" is unsupported.`);
-  }
   const legacyIdPrefixes = source.legacyIdPrefixes ?? [];
   if (!Array.isArray(legacyIdPrefixes) || legacyIdPrefixes.some((prefix) => typeof prefix !== "string" || !/^[A-Z][A-Z0-9]*$/.test(prefix))) {
     throw new TypeError(`Legacy ID prefixes for "${key}" are invalid.`);
-  }
-  if (legacyIdPrefixes.length > 0 && !source.legacyAdapter) {
-    throw new TypeError(`Legacy ID prefixes for "${key}" require a legacyAdapter.`);
   }
   if (legacyIdPrefixes.includes(idPrefix) || new Set(legacyIdPrefixes).size !== legacyIdPrefixes.length) {
     throw new TypeError(`Legacy ID prefixes for "${key}" are duplicated.`);
@@ -161,7 +155,6 @@ function validateSource(source, sourceKeys, paths, prefixes) {
     categoryTone: source.categoryTone,
     extraFields: Object.freeze(validatedFields),
     legacyIdPrefixes: Object.freeze(legacyIdPrefixes),
-    ...(source.legacyAdapter ? { legacyAdapter: source.legacyAdapter } : {}),
   });
 }
 

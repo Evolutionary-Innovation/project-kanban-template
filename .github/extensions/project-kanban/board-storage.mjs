@@ -6,9 +6,7 @@ import {
   appendTaskRecord,
   deleteTaskRecord,
   ensureTaskIdSequence,
-  hasCanonicalTaskTable,
   isValidDateOnly,
-  migrateLegacyMarkdown,
   nextTaskOrder,
   normalizeConfiguredTaskTable,
   parseBoardDocuments,
@@ -300,16 +298,8 @@ async function withLockedDocuments(workspaceRoot, config, revisions, mutate) {
 
 function canonicalMarkdown(documents, board, source, config) {
   const markdown = documents[source.path];
-  let canonical = markdown;
   const tasks = board.tasks.filter(({ source: taskSource }) => taskSource.document === source.path);
-  if (!hasCanonicalTaskTable(markdown, source, config)) {
-    try {
-      canonical = migrateLegacyMarkdown(markdown, source, tasks, config);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown migration error.";
-      throw new BoardStorageError("board_migration_failed", `Unable to migrate ${source.path}: ${message}`);
-    }
-  }
+  let canonical = markdown;
   try {
     canonical = normalizeConfiguredTaskTable(canonical, source, config);
   } catch (error) {

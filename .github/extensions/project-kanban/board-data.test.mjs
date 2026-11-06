@@ -83,6 +83,32 @@ ${config.schemaMarker}
   );
 });
 
+test("preserves historical ID aliases without a legacy-format adapter", () => {
+  const rawConfig = testConfig();
+  rawConfig.sources[2].legacyIdPrefixes = ["OLD"];
+  const { config, documents } = loadProject(rawConfig);
+  const audit = config.sources[2];
+  const roadmap = config.sources[0];
+  const aliasedAudit = documents[audit.path].replace("| RA-001 |", "| OLD-20 |");
+  const dependentRoadmap = updateTaskRecord(
+    documents[roadmap.path],
+    "RM-001",
+    { dependsOn: "OLD-20" },
+    roadmap,
+    config,
+  );
+  const board = parseBoardDocuments({
+    ...documents,
+    [audit.path]: aliasedAudit,
+    [roadmap.path]: dependentRoadmap,
+  }, config);
+
+  const historicalTask = board.tasks.find(({ id }) => id === "OLD-20");
+  assert.equal(historicalTask.source.document, audit.path);
+  assert.deepEqual(board.tasks.find(({ id }) => id === "RM-001").dependencyView.dependsOn, ["OLD-20"]);
+  assert.equal(allocateTaskId("repositoryAudit", board.tasks, config), "RA-001");
+});
+
 test("parses a separately configured project's statuses, source paths, priorities, and extra fields", () => {
   const { config, documents } = loadProject(independentTestConfig());
   const board = parseBoardDocuments(documents, config);
@@ -144,7 +170,10 @@ test("rejects malformed schemas, invalid values, and duplicate task IDs", async 
   const missingMarker = documents[audit.path].replace(config.schemaMarker, "<!-- other-schema:1 -->");
   assert.throws(() => parseBoardDocuments({ ...documents, [audit.path]: missingMarker }, config), /schema marker/);
 
-  const invalidSequence = `${documents[audit.path]}\n<!-- project-kanban-id-sequence:${config.sources[2].legacyIdPrefixes[0] ?? "TD"}:2 -->`;
+  const missingTable = documents[audit.path].replace("## Kanban tasks", "## Historical notes");
+  assert.throws(() => parseBoardDocuments({ ...documents, [audit.path]: missingTable }, config), /canonical schema-v1 task table/);
+
+  const invalidSequence = `${documents[audit.path]}\n<!-- project-kanban-id-sequence:TD:2 -->`;
   assert.throws(() => parseBoardDocuments({ ...documents, [audit.path]: invalidSequence }, config), /does not match RA/);
 
   const invalidPriority = documents[audit.path].replace("| Low | 100 |", "| Urgent | 100 |");

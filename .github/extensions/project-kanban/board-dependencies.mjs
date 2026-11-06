@@ -1,6 +1,9 @@
 function taskIdPattern(source) {
-  const prefix = source.idPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^${prefix}-\\d{${source.idWidth},}$`);
+  const formats = [
+    `${escapeRegExp(source.idPrefix)}-\\d{${source.idWidth},}`,
+    ...source.legacyIdPrefixes.map((prefix) => `${escapeRegExp(prefix)}-\\d+`),
+  ];
+  return new RegExp(`^(?:${formats.join("|")})$`);
 }
 
 function escapeRegExp(value) {
@@ -46,9 +49,10 @@ export function parseDependencyIds(value, config) {
 
 export function findDependencySuggestions(tasks, config) {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const taskIdFormats = config.sources.map(
-    ({ idPrefix, idWidth }) => `${escapeRegExp(idPrefix)}-\\d{${idWidth},}`,
-  );
+  const taskIdFormats = config.sources.flatMap((source) => [
+    `${escapeRegExp(source.idPrefix)}-\\d{${source.idWidth},}`,
+    ...source.legacyIdPrefixes.map((prefix) => `${escapeRegExp(prefix)}-\\d+`),
+  ]);
   if (taskIdFormats.length === 0) return [];
 
   const id = `(?<id>(?<![A-Z0-9_-])(?:${taskIdFormats.join("|")})(?![A-Z0-9_-]))`;

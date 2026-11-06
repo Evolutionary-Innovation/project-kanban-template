@@ -64,8 +64,4 @@ For a consumer integration smoke test, set `KANBAN_CONSUMER_ROOT` to a consumer 
 KANBAN_CONSUMER_ROOT=/path/to/consumer node --test .github/extensions/project-kanban/consumer-integration/*.test.mjs
 ```
 
-Legacy adapter tests are an isolated compatibility suite:
-
-```sh
-node --test .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
-```
+The extension reads configured schema-v1 task tables only. It does not infer or convert historical formats; any required migration belongs in an explicit project-owned utility.

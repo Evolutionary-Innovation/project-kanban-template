@@ -19,16 +19,14 @@ The extension reads and writes only the configured workspace-relative Markdown f
 
 Add a source entry with a unique key, relative path, ID prefix and width, category/tone, and any source-specific extra fields. Create the Markdown file and table before opening the board. The config validator rejects paths outside the workspace and invalid or duplicate values.
 
-Use a legacy adapter only when one is explicitly implemented and named in the config. The bundled Trade-MSTR v1 adapter exists for its historical headings and marker; new projects should author canonical tables directly.
-
-For Trade-MSTR v1 documents, set `legacyAdapter` consistently on all three source entries and set `schemaMarker` to `<!-- trade-mstr-kanban-schema:1 -->`. If a legacy source contains IDs allocated by another source (for example audit tasks with `TD-` IDs), declare those prefixes in that source's `legacyIdPrefixes`; new IDs still use the source's primary `idPrefix`.
+The shared runtime reads only configured schema-v1 task tables and never infers or converts historical formats. Keep any required one-time conversion in an explicit utility owned by the project whose documents need conversion. A source may list historical ID prefixes in `legacyIdPrefixes`; those aliases affect task-ID validation but do not change the prefix used for newly allocated IDs.
 
 ## Validate locally
 
 No package installation is required. With Node.js available, run:
 
 ```sh
-node --test .github/extensions/project-kanban/*.test.mjs .github/extensions/project-kanban/adapters/trade-mstr-v1/*.test.mjs
+node --test .github/extensions/project-kanban/*.test.mjs
 ```
 
 The `examples/independent-project/` fixture demonstrates a project with different statuses, sources, prefixes, and task fields.

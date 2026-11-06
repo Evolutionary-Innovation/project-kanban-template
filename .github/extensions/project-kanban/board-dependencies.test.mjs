@@ -22,6 +22,44 @@ test("validates configured dependency ID formats and normalizes comma-separated 
   assert.throws(() => parseDependencyIds("RM-019,,TD-03", config), /empty task ID/);
 });
 
+test("accepts configured historical ID aliases in stored and suggested dependencies", () => {
+  const rawConfig = testConfig();
+  rawConfig.sources[2].legacyIdPrefixes = ["OLD"];
+  const aliasConfig = validateBoardConfig(rawConfig);
+  const tasks = [
+    {
+      id: "RM-019",
+      title: "Dependent task",
+      details: "This work depends on OLD-20.",
+      dependsOn: "OLD-20",
+      source: { document: roadmapPath },
+    },
+    {
+      id: "OLD-20",
+      title: "Historical audit task",
+      details: "",
+      dependsOn: "",
+      source: { document: aliasConfig.sources[2].path },
+    },
+  ];
+
+  assert.deepEqual(parseDependencyIds("OLD-20", aliasConfig), ["OLD-20"]);
+  assert.deepEqual(parseDependencyIds("OLD-7", aliasConfig), ["OLD-7"]);
+  assert.deepEqual(parseDependencyIds("OLD-1234567", aliasConfig), ["OLD-1234567"]);
+  assert.deepEqual(
+    analyzeDependencies(tasks, aliasConfig).taskViews.get("RM-019").dependsOn,
+    ["OLD-20"],
+  );
+  assert.equal(findDependencySuggestions(tasks, aliasConfig).length, 0);
+
+  tasks[0].details = "This work depends on OLD-1234567.";
+  tasks[0].dependsOn = "";
+  tasks[1].id = "OLD-1234567";
+  const suggestions = findDependencySuggestions(tasks, aliasConfig);
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].prerequisiteTaskId, "OLD-1234567");
+});
+
 test("derives blockers and graph edges from stored Depends On relationships", () => {
   const tasks = [
     { id: "TD-03", title: "Prerequisite", status: "In Progress", dependsOn: "", source: { document: debtPath } },

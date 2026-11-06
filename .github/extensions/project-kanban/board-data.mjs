@@ -1,4 +1,3 @@
-import { getLegacyAdapter } from "./legacy-adapters.mjs";
 import {
   analyzeDependencies,
   findDependencySuggestions,
@@ -255,37 +254,12 @@ export function parseBoardDocuments(documents, config) {
     validateTaskIdSequence(markdown, source);
     return { source, markdown, schema: findSchemaTable(markdown, source, config) };
   });
-  const legacySources = parsedSources.filter(({ schema }) => !schema);
-  let tasks = parsedSources.flatMap(({ schema }) => schema?.tasks ?? []);
-
-  if (legacySources.length > 0) {
-    const adapterNames = new Set(legacySources.map(({ source }) => source.legacyAdapter).filter(Boolean));
-    if (adapterNames.size !== 1 || legacySources.some(({ source }) => !source.legacyAdapter)) {
-      throw new Error("Every source without a canonical task table must declare the same supported legacyAdapter.");
-    }
-    if (parsedSources.some(({ source }) => source.legacyAdapter !== [...adapterNames][0])) {
-      throw new Error("A legacy adapter must be declared consistently for every configured source.");
-    }
-    const adapter = getLegacyAdapter([...adapterNames][0]);
-    const legacyPaths = new Set(legacySources.map(({ source }) => source.path));
-    tasks.push(
-      ...adapter
-        .parse(documents, config)
-        .filter((task) => legacyPaths.has(task.source.document))
-        .map((task) => {
-          const source = config.sources.find(({ path }) => path === task.source.document);
-          const dateFields = Object.fromEntries(
-            source.extraFields
-              .filter(({ type }) => type === "date")
-              .map(({ key }) => [key, task[key] ?? ""]),
-          );
-          return { ...task, ...dateFields };
-        }),
-    );
+  const missingSchema = parsedSources.find(({ schema }) => !schema);
+  if (missingSchema) {
+    throw new Error(`${missingSchema.source.path}: a canonical schema-v1 task table is required.`);
   }
+  const tasks = parsedSources.flatMap(({ schema }) => schema.tasks);
 
-  const sourcePaths = new Set(config.sources.map(({ path }) => path));
-  tasks = tasks.filter((task) => sourcePaths.has(task.source.document));
   const sourceByPath = new Map(config.sources.map((source) => [source.path, source]));
   const seenIds = new Set();
   for (const task of tasks) {
@@ -296,10 +270,6 @@ export function parseBoardDocuments(documents, config) {
     seenIds.add(task.id);
   }
   return buildBoard(tasks, config);
-}
-
-export function hasCanonicalTaskTable(markdown, source, config) {
-  return findSchemaTable(markdown, source, config) !== null;
 }
 
 function headerIndex(headers, key) {
@@ -564,12 +534,4 @@ export function deleteTaskRecord(markdown, taskId, source, config) {
   if (rowIndex === -1) throw new Error(`Task "${taskId}" was not found in ${source.path}.`);
   lines.splice(rowIndex, 1);
   return lines.join("\n");
-}
-
-export function migrateLegacyMarkdown(markdown, source, tasks, config) {
-  if (!source.legacyAdapter) {
-    throw new Error(`${source.path}: legacy Markdown requires an explicitly configured adapter.`);
-  }
-  const adapter = getLegacyAdapter(source.legacyAdapter);
-  return normalizeConfiguredTaskTable(adapter.migrate(markdown, source, tasks, config), source, config);
 }

@@ -3,7 +3,7 @@ import * as dagre from "./vendor/dagre-3.1.3.mjs";
 
 self.addEventListener("message", ({ data }) => {
   try {
-    self.postMessage({ layout: layoutGraph(data, dagre) });
+    self.postMessage({ layout: layoutGraph(data, dagre, data.groupBy ?? "none") });
   } catch (error) {
     self.postMessage({
       error: error instanceof RangeError && /call stack/i.test(error.message)

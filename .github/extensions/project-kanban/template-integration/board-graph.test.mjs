@@ -184,6 +184,28 @@ test("projects shared filters, dependency context, focus paths and temporary rev
   assert.ok(unresolvedView.nodes.some(({ unresolved, matchKind }) => unresolved && matchKind === "context"));
 });
 
+test("hides completed work without inventing dependency edges or changing the full chain", async () => {
+  const snapshot = await fixture();
+  const full = createGraphView(snapshot);
+  const completedIds = new Set(snapshot.tasks
+    .filter(({ status }) => status === snapshot.config.completionStatus)
+    .map(({ id }) => id));
+  const hidden = projectGraphView(full, snapshot, {}, {}, { showCompletedWork: false });
+
+  assert.equal(hidden.hiddenCompletedCount, completedIds.size);
+  assert.ok(hidden.hiddenCompletedEdgeCount > 0);
+  assert.ok(hidden.nodes.every(({ id }) => !completedIds.has(id)));
+  assert.ok(hidden.edges.every(({ source, target }) =>
+    !completedIds.has(source) && !completedIds.has(target)));
+  assert.deepEqual(hidden.workflow.longestChainIds, full.workflow.longestChainIds);
+  assert.equal(hidden.hiddenCompletedCount > 0, true);
+
+  const restored = projectGraphView(full, snapshot);
+  assert.equal(restored.hiddenCompletedCount, 0);
+  assert.equal(restored.nodes.length, full.nodes.length);
+  assert.equal(restored.edges.length, full.edges.length);
+});
+
 test("lays out chains, diamonds, disconnected components and cycles while retaining original directions", async () => {
   const base = await fixture();
   const task = base.tasks[0];
@@ -205,6 +227,44 @@ test("lays out chains, diamonds, disconnected components and cycles while retain
     assert.ok(result.nodes.find(({ id }) => id === source).y < result.nodes.find(({ id }) => id === target).y);
   }
   for (const edge of view.edges) assert.ok(result.edges.some((item) => item.source === edge.source && item.target === edge.target));
+});
+
+test("groups graph nodes into explicit Area or Category regions", async () => {
+  const view = createGraphView(await fixture());
+  for (const groupBy of ["area", "category"]) {
+    const result = layoutGraph(view, dagre, groupBy);
+    assertLayout(view, result);
+    const labels = new Set(view.nodes.map((node) => String(node[groupBy] ?? "").trim() || "Unassigned"));
+    assert.deepEqual(new Set(result.groups.map(({ label }) => label)), labels);
+    const expectedCrossGroupEdges = view.edges.filter(({ source, target }) =>
+      (String(view.nodes.find(({ id }) => id === source)[groupBy] ?? "").trim() || "Unassigned") !==
+      (String(view.nodes.find(({ id }) => id === target)[groupBy] ?? "").trim() || "Unassigned"));
+    assert.equal(result.edges.filter(({ crossGroup }) => crossGroup).length, expectedCrossGroupEdges.length);
+    assert.equal(result.edges.length, view.edges.length);
+    const maxGroupRight = Math.max(...result.groups.map(({ x, width }) => x + width));
+    for (const edge of result.edges) {
+      assert.ok(edge.points.every(({ x, y }) => x <= result.width && y <= result.height));
+      if (edge.crossGroup) assert.ok(edge.points.some(({ x }) => x > maxGroupRight));
+    }
+    for (let index = 0; index < result.groups.length; index += 1) {
+      const current = result.groups[index];
+      for (const other of result.groups.slice(index + 1)) {
+        assert.ok(current.x + current.width <= other.x || other.x + other.width <= current.x ||
+          current.y + current.height <= other.y || other.y + other.height <= current.y);
+      }
+    }
+    for (const group of result.groups) {
+      for (const node of view.nodes.filter((item) =>
+        (String(item[groupBy] ?? "").trim() || "Unassigned") === group.label)) {
+        const position = result.nodes.find(({ id }) => id === node.id);
+        assert.ok(position.x - position.width / 2 >= group.x);
+        assert.ok(position.y - position.height / 2 >= group.y);
+        assert.ok(position.x + position.width / 2 <= group.x + group.width);
+        assert.ok(position.y + position.height / 2 <= group.y + group.height);
+      }
+    }
+  }
+  assert.throws(() => layoutGraph(view, dagre, "priority"), /grouping must be none, area, or category/);
 });
 
 test("supports empty graphs, independent configuration, isolated tasks and compact titles", async () => {
@@ -229,6 +289,9 @@ test("layout cache ignores presentation changes but responds to topology changes
   changed.nodes[0].status = "Changed";
   changed.nodes[0].title = "Changed title";
   assert.equal(graphLayoutKey(view), graphLayoutKey(changed));
+  assert.notEqual(graphLayoutKey(view, "area"), graphLayoutKey(view, "category"));
+  changed.nodes[0].area = `${changed.nodes[0].area} changed`;
+  assert.notEqual(graphLayoutKey(view, "area"), graphLayoutKey(changed, "area"));
   changed.edges.pop();
   assert.notEqual(graphLayoutKey(view), graphLayoutKey(changed));
 });

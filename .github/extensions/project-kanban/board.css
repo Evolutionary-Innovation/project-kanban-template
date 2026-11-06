@@ -578,6 +578,63 @@ h1 span {
   opacity: 0.5;
 }
 
+.graph-toolbar {
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 10px;
+  border: 1px solid #d3e1e3;
+  border-radius: 10px;
+  background: #f7fafb;
+}
+
+.graph-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 8px;
+  border-right: 1px solid #d3e1e3;
+}
+
+.graph-toolbar-group:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.graph-zoom-field,
+.graph-group-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #536b76;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+#graph-zoom-input,
+#graph-group-by {
+  min-height: 36px;
+  padding: 0 7px;
+  border: 1px solid #b8c9cd;
+  border-radius: 6px;
+  background: #fff;
+  color: #172a3a;
+  font: inherit;
+}
+
+#graph-zoom-input {
+  width: 5.5ch;
+  text-align: right;
+}
+
+#graph-zoom-input:focus-visible,
+#graph-group-by:focus-visible {
+  outline: 3px solid #398785;
+  outline-offset: 2px;
+}
+
 .graph-context-menu {
   position: fixed;
   z-index: 20;
@@ -626,12 +683,6 @@ h1 span {
   background: #d3e1e3;
 }
 
-.graph-scope-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin: 6px 0;
-}
-
 .view-toolbar.graph-active .board-only-action {
   display: none;
 }
@@ -648,16 +699,16 @@ h1 span {
 }
 
 .graph-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  align-items: start;
-  gap: 14px;
+  width: 100%;
+  min-width: 0;
 }
 
 .graph-viewport {
   position: relative;
-  height: min(65vh, 680px);
-  min-height: 320px;
+  width: 100%;
+  height: min(78vh, 960px);
+  min-height: 520px;
+  min-width: 0;
   overflow: auto;
   border: 1px solid #d3e1e3;
   border-radius: 12px;
@@ -666,6 +717,7 @@ h1 span {
   cursor: grab;
   user-select: none;
   touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
 }
 
 .graph-viewport.is-panning {
@@ -696,12 +748,34 @@ h1 span {
 
 #graph-diagram {
   display: block;
+  max-width: none;
+}
+
+.graph-group {
+  pointer-events: none;
+}
+
+.graph-group rect {
+  fill: #f7fafb;
+  stroke: #91a5ad;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.graph-group text {
+  fill: #294c5c;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .graph-edge {
   fill: none;
   stroke: #71848c;
   stroke-width: 1.5;
+}
+
+.graph-edge.is-cross-group {
+  stroke-dasharray: 3 4;
 }
 
 .graph-edge.is-blocking {
@@ -738,6 +812,20 @@ h1 span {
 
 .graph-node[data-priority-tone="low"] rect {
   stroke: #528b86;
+}
+
+.graph-node[data-status-order="1"] rect {
+  stroke-dasharray: 8 3;
+}
+
+.graph-node[data-status-order="2"] rect {
+  stroke-dasharray: 2 3;
+}
+
+.graph-node[data-workflow-state="blocked"] rect {
+  stroke: #172a3a;
+  stroke-width: 4;
+  stroke-dasharray: 9 2 2 2;
 }
 
 .graph-node.is-critical-path rect {
@@ -811,9 +899,15 @@ h1 span {
 }
 
 .graph-inspector {
-  max-height: 680px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: start;
+  gap: 14px 20px;
+  width: 100%;
+  max-height: none;
+  margin-top: 14px;
   padding: 18px;
-  overflow: auto;
+  overflow: visible;
   overflow-wrap: anywhere;
   border: 1px solid #d3e1e3;
   border-radius: 12px;
@@ -823,8 +917,15 @@ h1 span {
 }
 
 .graph-inspector h3 {
+  grid-column: 1 / -1;
   margin-top: 0;
   font-size: 1rem;
+}
+
+.graph-inspector > dl,
+.graph-inspector > .graph-inspector-relationships,
+.graph-inspector > .graph-inspector-hidden-context {
+  grid-column: 1 / -1;
 }
 
 .graph-inspector h4 {
@@ -1611,12 +1712,14 @@ h1 span {
     flex-direction: column;
   }
 
-  .graph-workspace {
-    grid-template-columns: minmax(0, 1fr);
+  .graph-viewport {
+    height: min(72vh, 760px);
+    min-height: 420px;
   }
 
-  .graph-inspector {
-    max-height: 400px;
+  .graph-toolbar-group {
+    padding-right: 0;
+    border-right: 0;
   }
 
   .board-toolbar {
@@ -1630,6 +1733,21 @@ h1 span {
 
   .header-actions {
     justify-items: start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .graph-viewport {
+    height: min(70vh, 640px);
+    min-height: 360px;
+  }
+
+  .graph-toolbar {
+    align-items: stretch;
+  }
+
+  .graph-toolbar-group {
     width: 100%;
   }
 

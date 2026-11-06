@@ -32,10 +32,18 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   const workflowSummary = root.querySelector("#graph-workflow-summary");
   const criticalChain = root.querySelector("#graph-critical-chain");
   const wholeProjectButton = root.querySelector("#graph-whole-project");
+  const focusNeighborhoodButton = root.querySelector("#graph-focus-neighbourhood");
+  const expandUpstreamButton = root.querySelector("#graph-expand-upstream");
+  const expandDownstreamButton = root.querySelector("#graph-expand-downstream");
+  const showOnBoardButton = root.querySelector("#graph-show-on-board");
+  const editTaskButton = root.querySelector("#graph-edit-task");
+  const completedToggle = root.querySelector("#graph-completed-toggle");
+  const groupBySelect = root.querySelector("#graph-group-by");
   const contextMenu = root.querySelector("#graph-context-menu");
   const errorPanel = root.querySelector("#graph-error");
   const errorMessage = root.querySelector("#graph-error-message");
   const zoomLabel = root.querySelector("#graph-zoom");
+  const zoomInput = root.querySelector("#graph-zoom-input");
   const viewportControls = [...root.querySelectorAll("[data-graph-zoom]")];
   let generation = 0;
   let model = null;
@@ -44,6 +52,9 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   let selectedId = null;
   let focusedId = null;
   let zoom = 1;
+  let showCompletedWork = true;
+  let groupBy = "none";
+  let diagramAvailable = false;
   let layoutWorker = null;
   let rejectLayout = null;
   const nodeElements = new Map();
@@ -69,7 +80,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     rejectLayout = null;
   }
 
-  function calculateLayout(view) {
+  function calculateLayout(view, grouping) {
     return new Promise((resolve, reject) => {
       const worker = new Worker(new URL("./board-graph-worker.mjs", import.meta.url), { type: "module" });
       layoutWorker = worker;
@@ -93,10 +104,42 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         finish(new Error(event.message || "The dependency layout worker could not be loaded."));
       });
       worker.postMessage({
-        nodes: view.nodes.map(({ id }) => ({ id })),
+        nodes: view.nodes.map(({ id, area, category }) => ({ id, area, category })),
         edges: view.edges.map(({ source, target }) => ({ source, target })),
+        groupBy: grouping,
       });
     });
+  }
+
+  function updateToolbar() {
+    const graphAvailable = diagramAvailable && Boolean(model?.nodes.length);
+    const viewAvailable = diagramAvailable && Boolean(latestSnapshot);
+    for (const control of viewportControls) control.disabled = !graphAvailable;
+    zoomInput.disabled = !graphAvailable;
+    groupBySelect.disabled = !viewAvailable;
+    completedToggle.disabled = !viewAvailable;
+    completedToggle.textContent = showCompletedWork ? "Hide completed work" : "Show completed work";
+    groupBySelect.value = groupBy;
+
+    const node = model?.nodes.find(({ id }) => id === selectedId);
+    const sourceTask = node && !node.unresolved
+      ? latestSnapshot?.tasks.find(({ id }) => id === node.id)
+      : null;
+    const hasSelectedTask = graphAvailable && Boolean(sourceTask);
+    focusNeighborhoodButton.disabled = !hasSelectedTask;
+    showOnBoardButton.disabled = !hasSelectedTask;
+    editTaskButton.disabled = !hasSelectedTask;
+    wholeProjectButton.disabled = !graphAvailable || !scope.focusId;
+
+    const expandTaskId = scope.focusId ?? (hasSelectedTask ? node.id : null);
+    expandUpstreamButton.disabled = !expandTaskId || !graphAvailable || Boolean(scope.expandUpstream);
+    expandDownstreamButton.disabled = !expandTaskId || !graphAvailable || Boolean(scope.expandDownstream);
+    expandUpstreamButton.textContent = scope.expandUpstream
+      ? "Upstream path expanded"
+      : "Expand upstream path";
+    expandDownstreamButton.textContent = scope.expandDownstream
+      ? "Downstream impact expanded"
+      : "Expand downstream impact";
   }
 
   function nodeLabel(node) {
@@ -146,16 +189,6 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       section.append(list);
     }
     return section;
-  }
-
-  function actionButton(label, action, handler) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "secondary-button";
-    button.textContent = label;
-    button.addEventListener("click", handler);
-    button.dataset.graphAction = action;
-    return button;
   }
 
   function closeContextMenu(restoreFocus = false) {
@@ -279,29 +312,6 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       inspector.append(hint);
       return;
     }
-    const sourceTask = latestSnapshot?.tasks.find(({ id }) => id === node.id);
-    if (!node.unresolved && sourceTask) {
-      const actions = document.createElement("div");
-      actions.className = "graph-inspector-actions";
-      actions.append(
-        actionButton("Edit task", "edit", () => invokeGraphTaskEdit(latestSnapshot, node.id, onEditTask)),
-        actionButton("Show on board", "board", () => onShowOnBoard?.(node.id)),
-      );
-      if (scope.focusId) {
-        actions.append(
-          actionButton(scope.expandUpstream ? "Upstream expanded" : "Expand upstream path", "expand-upstream", () =>
-            expandFocus(scope.focusId, "upstream")),
-          actionButton(scope.expandDownstream ? "Downstream expanded" : "Expand downstream impact", "expand-downstream", () =>
-            expandFocus(scope.focusId, "downstream")),
-        );
-        actions.querySelector('[data-graph-action="expand-upstream"]').disabled = scope.expandUpstream;
-        actions.querySelector('[data-graph-action="expand-downstream"]').disabled = scope.expandDownstream;
-      } else {
-        actions.append(actionButton("Focus neighbourhood", "focus-neighbourhood", () =>
-          focusNeighborhood(node.id)));
-      }
-      inspector.append(actions);
-    }
     const metadata = document.createElement("dl");
     const workflowLabels = {
       ready: "Dependency-ready (advisory)",
@@ -370,6 +380,27 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       relationshipList(node.unresolved ? "Referenced by" : "Direct dependents", dependents),
     );
     inspector.append(relationships);
+    if (!showCompletedWork && !node.unresolved) {
+      const completionStatus = latestSnapshot.config.completionStatus;
+      const hiddenRelationships = latestSnapshot.dependencyGraph.edges.flatMap(({ source, target }) => {
+        const sourceTask = latestSnapshot.tasks.find(({ id }) => id === source);
+        const targetTask = latestSnapshot.tasks.find(({ id }) => id === target);
+        if (source === node.id && targetTask?.status === completionStatus) return [target];
+        if (target === node.id && sourceTask?.status === completionStatus) return [source];
+        return [];
+      });
+      if (hiddenRelationships.length) {
+        const hiddenContext = document.createElement("section");
+        hiddenContext.className = "graph-inspector-hidden-context";
+        hiddenContext.tabIndex = -1;
+        const title = document.createElement("h4");
+        const content = document.createElement("p");
+        title.textContent = "Completed relationships hidden from diagram";
+        content.textContent = `${[...new Set(hiddenRelationships)].join(", ")}. Show completed work to see the full dependency paths.`;
+        hiddenContext.append(title, content);
+        inspector.append(hiddenContext);
+      }
+    }
     for (const { label, value } of node.details) {
       const section = document.createElement("section");
       const title = document.createElement("h4");
@@ -391,6 +422,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       element.setAttribute("tabindex", nodeId === id ? "0" : "-1");
     }
     renderInspector();
+    updateToolbar();
     message.textContent = `Selected ${nodeLabel(node)}`;
     if (focus) {
       nodeElements.get(id)?.focus({ preventScroll: true });
@@ -400,10 +432,11 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
 
   function setZoom(value, resetScroll = false) {
     if (!positions?.nodes.length) return;
-    zoom = Math.max(0.001, Math.min(2, value));
+    zoom = Math.max(0.01, Math.min(2, value));
     diagram.setAttribute("width", String(Math.ceil(positions.width * zoom)));
     diagram.setAttribute("height", String(Math.ceil(positions.height * zoom)));
     zoomLabel.textContent = `${(zoom * 100).toFixed(zoom < 0.01 ? 1 : 0)}%`;
+    zoomInput.value = String(Math.round(zoom * 100));
     if (resetScroll) {
       viewport.scrollLeft = 0;
       viewport.scrollTop = 0;
@@ -616,12 +649,23 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     marker.append(svgElement("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "context-stroke" }));
     defs.append(marker);
     diagram.append(defs);
+    for (const group of positions.groups ?? []) {
+      const groupElement = svgElement("g", { class: "graph-group" });
+      groupElement.append(svgElement("rect", {
+        x: group.x, y: group.y, width: group.width, height: group.height, rx: 12,
+      }));
+      const title = `${groupBy === "area" ? "Area" : "Category"}: ${group.label}`;
+      const label = svgElement("text", { x: group.x + 12, y: group.y + 22, class: "graph-group-label" }, title);
+      groupElement.append(label);
+      diagram.append(groupElement);
+    }
     const edgePositions = new Map(positions.edges.map((edge) => [JSON.stringify([edge.source, edge.target]), edge]));
     for (const edge of model.edges) {
       const layoutEdge = edgePositions.get(JSON.stringify([edge.source, edge.target]));
       const path = svgElement("path", {
         d: layoutEdge.points.map(({ x, y }, index) => `${index ? "L" : "M"} ${x} ${y}`).join(" "),
-        class: `graph-edge${edge.blocking ? " is-blocking" : ""}${edge.unresolved ? " is-unresolved" : ""}` +
+        class: `graph-edge${layoutEdge.crossGroup ? " is-cross-group" : ""}` +
+          `${edge.blocking ? " is-blocking" : ""}${edge.unresolved ? " is-unresolved" : ""}` +
           `${edge.isCriticalPath ? " is-critical-path" : ""}`,
         "marker-end": "url(#dependency-arrow)",
         "data-source": edge.source,
@@ -638,9 +682,12 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         class: `graph-node${node.unresolved ? " is-unresolved" : ""}${node.hasCycle ? " has-cycle" : ""}` +
           `${node.matchKind === "context" ? " is-context" : ""}` +
           `${node.matchKind === "revealed" ? " is-revealed" : ""}` +
-          `${node.isCriticalPath ? " is-critical-path" : ""}`,
+          `${node.isCriticalPath ? " is-critical-path" : ""}` +
+          `${node.workflowState === "blocked" ? " is-blocked" : ""}`,
         "data-task-id": node.id,
         "data-priority-tone": node.priorityTone,
+        "data-status-order": node.statusOrder,
+        "data-workflow-state": node.workflowState,
         role: "button", tabindex: node.id === focusedId ? 0 : -1,
         "aria-label": nodeLabel(node), "aria-pressed": node.id === selectedId,
         "aria-keyshortcuts": "Enter Space ContextMenu Shift+F10",
@@ -653,7 +700,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       const status = node.status.length > 30 ? `${node.status.slice(0, 27)}...` : node.status;
       group.append(svgElement("text", { x: 14, y: 82, class: "graph-node-status" }, status));
       const warning = [
-        ...(node.blockedBy.length ? [`Blocked: ${node.blockedBy.length}`] : []),
+        ...(node.blockedBy.length ? [`BLOCKED: ${node.blockedBy.length}`] : []),
         ...(node.hasCycle ? ["Cycle"] : []),
       ].join(" / ");
       if (warning) group.append(svgElement("text", { x: 14, y: 102, class: "graph-node-warning" }, warning));
@@ -768,6 +815,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     stopLayout();
     closeContextMenu(false);
     model = view;
+    diagramAvailable = false;
     selectedId = null;
     nodeElements.clear();
     diagram.replaceChildren();
@@ -781,8 +829,8 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     errorMessage.textContent = text;
     errorPanel.hidden = false;
     viewport.hidden = true;
-    for (const control of viewportControls) control.disabled = true;
     zoomLabel.textContent = "";
+    updateToolbar();
     message.textContent = model
       ? `Dependency diagram unavailable. ${model.taskCount} tasks remain available in the relationship list.`
       : "Dependency graph unavailable.";
@@ -810,27 +858,33 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         !latestCriteria.area && !latestCriteria.dependency) {
         scope.revealedTaskId = null;
       }
-      nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope);
+      nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope, {
+        showCompletedWork,
+        groupBy,
+      });
       if (selectedId && snapshot.tasks.some(({ id }) => id === selectedId) &&
         !nextModel.nodes.some(({ id }) => id === selectedId) &&
         !nextModel.scope.focusId) {
         scope.revealedTaskId = selectedId;
-        nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope);
+        nextModel = projectGraphView(createGraphView(snapshot), snapshot, latestCriteria, scope, {
+          showCompletedWork,
+          groupBy,
+        });
       }
-      const key = graphLayoutKey(nextModel);
+      const key = graphLayoutKey(nextModel, groupBy);
       const needsLayout = key !== layoutKey || !positions;
-      const nextPositions = needsLayout ? await calculateLayout(nextModel) : positions;
+      const nextPositions = needsLayout ? await calculateLayout(nextModel, groupBy) : positions;
       if (request !== generation) return;
       positions = nextPositions;
       layoutKey = key;
       model = nextModel;
-      wholeProjectButton.disabled = !model.scope.focusId;
+      diagramAvailable = true;
       const removed = selectedId && !model.nodes.some(({ id }) => id === selectedId);
       if (removed) selectedId = null;
       if (!model.nodes.some(({ id }) => id === focusedId)) focusedId = model.nodes[0]?.id ?? null;
       errorPanel.hidden = true;
       viewport.hidden = model.nodes.length === 0;
-      for (const control of viewportControls) control.disabled = model.nodes.length === 0;
+      updateToolbar();
       drawDiagram();
       renderLists();
       renderWorkflowSummary();
@@ -840,10 +894,13 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       const focusDescription = model.scope.focusId
         ? `Focused on ${model.scope.focusId}: ${model.focusMatchingCount} matches in this focus of ${model.matchingCount} matching tasks project-wide.`
         : `${model.matchingCount} matching tasks.`;
+      const hiddenCompletedDescription = model.hiddenCompletedCount
+        ? ` ${model.hiddenCompletedCount} completed tasks are hidden and ${model.hiddenCompletedEdgeCount} connected dependency links are omitted. The project-wide longest dependency chain above still includes completed tasks; show completed work to inspect full paths.`
+        : "";
       message.textContent = model.nodes.length
-        ? `${focusDescription} ${model.contextCount} dependency context tasks, ${model.revealedCount} temporarily revealed tasks, ${model.unresolvedCount} unresolved placeholders and ${model.cycleCount} cycle tasks.`
+        ? `${focusDescription} ${model.contextCount} dependency context tasks, ${model.revealedCount} temporarily revealed tasks, ${model.unresolvedCount} unresolved placeholders and ${model.cycleCount} cycle tasks.${hiddenCompletedDescription}`
         : model.taskCount === 0 ? "No tasks in this project."
-          : "No tasks match the current filters in this graph scope.";
+          : `No tasks match the current filters in this graph scope.${hiddenCompletedDescription}`;
       if (restoreId && nodeElements.has(restoreId)) nodeElements.get(restoreId).focus({ preventScroll: true });
       else if (restoreId || restoreRetryFocus) {
         root.querySelector(model.nodes.length ? '[data-graph-zoom="fit"]' : "#graph-heading").focus();
@@ -862,6 +919,49 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       else setZoom(zoom * (action === "in" ? 1.25 : 0.8));
     });
   }
+  zoomInput.addEventListener("change", () => {
+    const requestedZoom = Number(zoomInput.value);
+    if (!Number.isFinite(requestedZoom) || requestedZoom < 1 || requestedZoom > 200) {
+      zoomInput.value = String(Math.round(zoom * 100));
+      message.textContent = "Enter a graph zoom between 1% and 200%.";
+      return;
+    }
+    setZoom(requestedZoom / 100);
+  });
+  focusNeighborhoodButton.addEventListener("click", () => {
+    if (selectedId) focusNeighborhood(selectedId);
+  });
+  expandUpstreamButton.addEventListener("click", () => {
+    const taskId = scope.focusId ?? selectedId;
+    if (taskId) expandFocus(taskId, "upstream");
+  });
+  expandDownstreamButton.addEventListener("click", () => {
+    const taskId = scope.focusId ?? selectedId;
+    if (taskId) expandFocus(taskId, "downstream");
+  });
+  wholeProjectButton.addEventListener("click", () => void resetScope());
+  showOnBoardButton.addEventListener("click", () => {
+    if (selectedId && latestSnapshot?.tasks.some(({ id }) => id === selectedId)) {
+      onShowOnBoard?.(selectedId);
+    }
+  });
+  editTaskButton.addEventListener("click", () => {
+    if (selectedId) invokeGraphTaskEdit(latestSnapshot, selectedId, onEditTask);
+  });
+  completedToggle.addEventListener("click", () => {
+    showCompletedWork = !showCompletedWork;
+    const focusedTask = latestSnapshot?.tasks.find(({ id }) => id === scope.focusId);
+    if (!showCompletedWork && focusedTask?.status === latestSnapshot.config.completionStatus) {
+      scope.focusId = null;
+      scope.expandUpstream = false;
+      scope.expandDownstream = false;
+    }
+    void render(latestSnapshot, latestCriteria);
+  });
+  groupBySelect.addEventListener("change", () => {
+    groupBy = groupBySelect.value;
+    void render(latestSnapshot, latestCriteria);
+  });
   return {
     render,
     fail,
@@ -874,10 +974,12 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     resetScope,
     selectTask: (id, focus = false) => selectNode(id, focus),
     async showTask(id) {
-      if (!latestSnapshot?.tasks.some((task) => task.id === id)) {
+      const task = latestSnapshot?.tasks.find((candidate) => candidate.id === id);
+      if (!task) {
         message.textContent = `Task ${id} is not available in the current snapshot. Refresh the board and retry.`;
         return;
       }
+      if (task.status === latestSnapshot.config.completionStatus) showCompletedWork = true;
       scope.focusId = null;
       scope.expandUpstream = false;
       scope.expandDownstream = false;

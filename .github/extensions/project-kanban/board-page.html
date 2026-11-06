@@ -171,18 +171,8 @@
         <h2 id="graph-heading" tabindex="-1">Project dependencies</h2>
         <p>Whole-project view, including isolated tasks. Shared search and filters apply in both views; direct prerequisites outside the matches are labelled as dependency context.</p>
         <p id="graph-help">Arrows run from prerequisite to dependent: A &#8594; B means B depends on A. Click to inspect, double-click to edit, or Shift+double-click to focus a node's neighbourhood. Drag to pan, Shift+drag to zoom to a box, and Shift+wheel to zoom. Right-click a node or press Shift+F10/Menu for node actions. Use arrow keys or Home/End to navigate nodes; in the menu, use arrows, Enter, or Escape.</p>
-        <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Purple outlines: longest unweighted dependency chain. Dashed nodes/arrows: unresolved references. Cycle warnings identify tasks, not every edge in a cycle.</p>
-        <div class="graph-controls" role="group" aria-label="Graph viewport">
-          <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit graph</button>
-          <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom in</button>
-          <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom out</button>
-          <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset zoom</button>
-          <output id="graph-zoom" aria-label="Graph zoom"></output>
-        </div>
+        <p class="graph-legend">Solid arrows: dependencies. Stronger arrows: current blockers. Purple outlines: longest unweighted dependency chain. Dashed nodes/arrows: unresolved references. Status labels and border patterns distinguish configured workflow states; BLOCKED labels identify current blockers. Cycle warnings identify tasks, not every edge in a cycle.</p>
         <div id="graph-context-menu" class="graph-context-menu" role="menu" aria-label="Task node actions" hidden></div>
-        <div class="graph-scope-controls" role="group" aria-label="Graph scope">
-          <button id="graph-whole-project" class="secondary-button" type="button" disabled>Whole project</button>
-        </div>
         <p id="graph-message" role="status" aria-live="polite" aria-atomic="true"></p>
         <section class="graph-workflow" aria-labelledby="graph-workflow-heading">
           <h3 id="graph-workflow-heading">Workflow intelligence</h3>
@@ -201,8 +191,38 @@
           <div id="graph-viewport" class="graph-viewport" tabindex="0" role="region" aria-label="Scrollable dependency diagram" aria-describedby="graph-help">
             <svg id="graph-diagram" role="group" aria-label="Task dependency diagram" aria-describedby="graph-help"></svg>
           </div>
-          <aside id="graph-inspector" class="graph-inspector" aria-label="Selected task information"></aside>
         </div>
+        <div id="graph-toolbar" class="graph-controls graph-toolbar" aria-label="Graph controls">
+          <div class="graph-toolbar-group" role="group" aria-label="Graph viewport controls">
+            <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit</button>
+            <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset</button>
+            <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom out</button>
+            <label class="graph-zoom-field">Zoom (%)
+              <input id="graph-zoom-input" type="number" min="1" max="200" step="1" inputmode="numeric" value="100" disabled>
+            </label>
+            <output id="graph-zoom" aria-label="Current graph zoom" aria-live="polite">100%</output>
+            <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom in</button>
+          </div>
+          <div class="graph-toolbar-group" role="group" aria-label="Selected task controls">
+            <button id="graph-focus-neighbourhood" class="secondary-button" type="button" disabled>Focus neighbourhood</button>
+            <button id="graph-expand-upstream" class="secondary-button" type="button" disabled>Expand upstream path</button>
+            <button id="graph-expand-downstream" class="secondary-button" type="button" disabled>Expand downstream impact</button>
+            <button id="graph-whole-project" class="secondary-button" type="button" disabled>Whole project</button>
+            <button id="graph-show-on-board" class="secondary-button" type="button" disabled>Show on board</button>
+            <button id="graph-edit-task" class="secondary-button" type="button" disabled>Edit task</button>
+          </div>
+          <div class="graph-toolbar-group" role="group" aria-label="Graph display controls">
+            <label class="graph-group-field">Group by
+              <select id="graph-group-by" disabled>
+                <option value="none">None</option>
+                <option value="area">Area</option>
+                <option value="category">Category</option>
+              </select>
+            </label>
+            <button id="graph-completed-toggle" class="secondary-button" type="button" disabled>Hide completed work</button>
+          </div>
+        </div>
+        <aside id="graph-inspector" class="graph-inspector" aria-label="Selected task information"></aside>
         <section id="graph-warnings" class="graph-warnings" aria-label="Dependency warnings"></section>
         <details class="graph-relationships">
           <summary>Accessible task and relationship list</summary>

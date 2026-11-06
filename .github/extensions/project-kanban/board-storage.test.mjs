@@ -1,8 +1,22 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   createTaskInDocuments,
   deleteTaskInDocuments,
@@ -19,8 +33,23 @@ function todayDateOnly() {
   return `${String(now.getFullYear()).padStart(4, "0")}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+const extensionDirectory = fileURLToPath(new URL(".", import.meta.url));
+
 async function createWorkspace(t, config = undefined) {
   return createTestWorkspace(t, config);
+}
+
+async function copyStorageInstallation(t, relativePath) {
+  const root = await mkdtemp(join(tmpdir(), "project-kanban-install-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const installation = join(root, relativePath);
+  await mkdir(installation, { recursive: true });
+
+  for (const file of ["board-storage.mjs", "board-data.mjs", "board-dependencies.mjs"]) {
+    await copyFile(join(extensionDirectory, file), join(installation, file));
+  }
+
+  return import(pathToFileURL(join(installation, "board-storage.mjs")).href);
 }
 
 test("persists Roadmap, Technical Debt, and Audit mutations to their configured Markdown sources", async (t) => {
@@ -444,6 +473,38 @@ test("moves tasks and rejects stale revisions without overwriting newer Markdown
     (error) => error instanceof BoardStorageError && error.code === "board_revision_conflict",
   );
   assert.equal(await readFile(roadmapPath, "utf8"), current);
+  await assert.rejects(
+    readFile(join(root, ".github/extensions/project-kanban/.kanban-write.lock")),
+    { code: "ENOENT" },
+  );
+});
+
+test("atomically replaces a source while preserving its mode and cleaning temporary files", async (t) => {
+  const { root, config } = await createWorkspace(t);
+  const roadmapPath = join(root, config.sources.find(({ key }) => key === "roadmap").path);
+  await chmod(roadmapPath, 0o640);
+  const original = await stat(roadmapPath);
+  const board = await readBoardSnapshot(root, config);
+  const updated = await createTaskInDocuments(root, config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Verify atomic replacement",
+      area: "Testing",
+      priority: "Low",
+      status: "Planned",
+      details: "",
+    },
+    revisions: board.revisions,
+  });
+  const replaced = await stat(roadmapPath);
+  const temporaryFiles = (await readdir(dirname(roadmapPath))).filter(
+    (name) => name.startsWith(`.${basename(roadmapPath)}.`) && name.endsWith(".tmp"),
+  );
+
+  assert.ok(updated.tasks.some(({ title }) => title === "Verify atomic replacement"));
+  assert.equal(replaced.mode & 0o777, original.mode & 0o777);
+  if (original.ino > 0 && replaced.ino > 0) assert.notEqual(replaced.ino, original.ino);
+  assert.deepEqual(temporaryFiles, []);
 });
 
 test("serializes writes with the exclusive workspace lock", async (t) => {
@@ -468,6 +529,71 @@ test("serializes writes with the exclusive workspace lock", async (t) => {
     (error) => error instanceof BoardStorageError && error.code === "board_write_busy",
   );
   assert.equal((await readBoardSnapshot(root, config)).tasks.length, board.tasks.length);
+});
+
+test("shares the workspace lock across independent installations and isolates other workspaces", async (t) => {
+  const installA = await copyStorageInstallation(t, "consumer-a/.github/extensions/board/runtime");
+  const installB = await copyStorageInstallation(t, "renamed-consumer/.copilot/extensions/renamed/deep");
+  const firstWorkspace = await createWorkspace(t);
+  const secondWorkspace = await createWorkspace(t);
+  const initialBoard = await installA.readBoardSnapshot(firstWorkspace.root, firstWorkspace.config);
+  const lockDirectory = join(firstWorkspace.root, ".github/extensions/project-kanban");
+  const lockPath = join(lockDirectory, ".kanban-write.lock");
+  await mkdir(lockDirectory, { recursive: true });
+  const heldLock = await open(lockPath, "wx", 0o600);
+
+  try {
+    await heldLock.writeFile("held by another installation\n");
+    await assert.rejects(
+      installB.createTaskInDocuments(firstWorkspace.root, firstWorkspace.config, {
+        sourceType: "roadmap",
+        task: {
+          title: "Blocked across installations",
+          area: "Testing",
+          priority: "Low",
+          status: "Planned",
+          details: "",
+        },
+        revisions: initialBoard.revisions,
+      }),
+      (error) => error?.code === "board_write_busy",
+    );
+
+    const independentBoard = await installB.readBoardSnapshot(secondWorkspace.root, secondWorkspace.config);
+    const independentWrite = await installB.createTaskInDocuments(secondWorkspace.root, secondWorkspace.config, {
+      sourceType: "roadmap",
+      task: {
+        title: "Independent workspace write",
+        area: "Testing",
+        priority: "Low",
+        status: "Planned",
+        details: "",
+      },
+      revisions: independentBoard.revisions,
+    });
+    assert.ok(independentWrite.tasks.some(({ title }) => title === "Independent workspace write"));
+    await assert.rejects(readFile(join(secondWorkspace.root, ".github/extensions/project-kanban/.kanban-write.lock")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await heldLock.close();
+    await unlink(lockPath);
+  }
+
+  const refreshedBoard = await installB.readBoardSnapshot(firstWorkspace.root, firstWorkspace.config);
+  const sharedWorkspaceWrite = await installB.createTaskInDocuments(firstWorkspace.root, firstWorkspace.config, {
+    sourceType: "roadmap",
+    task: {
+      title: "Write after shared lock release",
+      area: "Testing",
+      priority: "Low",
+      status: "Planned",
+      details: "",
+    },
+    revisions: refreshedBoard.revisions,
+  });
+  assert.ok(sharedWorkspaceWrite.tasks.some(({ title }) => title === "Write after shared lock release"));
+  await assert.rejects(readFile(lockPath), { code: "ENOENT" });
 });
 
 test("rejects configured source symlinks that resolve outside the workspace", async (t) => {

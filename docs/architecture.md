@@ -71,7 +71,7 @@ Planning uses a local read-only context export route and a same-origin request r
 
 ## Persistence and external systems
 
-Markdown task tables are the task source of truth. No task database or browser view-state file is maintained. Writes use workspace-relative source validation, an exclusive lock, revision hashes, Markdown cell escaping, same-directory temporary files, atomic rename, and original file modes. The per-source `project-kanban-id-sequence` comment retains the next ID after deletion; it is validated and updated in the same transaction as the task row. External Markdown changes require refresh rather than force overwrite.
+Markdown task tables are the task source of truth. No task database or browser view-state file is maintained. Writes use workspace-relative source validation, an exclusive lock, revision hashes, Markdown cell escaping, same-directory temporary files, atomic rename, and original file modes. Lock identity is rooted at the workspace, not the extension module location: runtime copies targeting one workspace share `<workspaceRoot>/.github/extensions/project-kanban/.kanban-write.lock`, while separate workspace roots are isolated. The per-source `project-kanban-id-sequence` comment retains the next ID after deletion; it is validated and updated in the same transaction as the task row. External Markdown changes require refresh rather than force overwrite.
 
 The browser-only synthetic test project under [`examples/synthetic-browser-project/`](../examples/synthetic-browser-project/) supplies fictional UX data and a local server rooted at that fixture. UX testing must not mutate the template's actual task registers.
 

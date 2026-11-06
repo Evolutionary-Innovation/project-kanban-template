@@ -126,6 +126,25 @@ export function formatCardTitle(task, source) {
   return `${task.id}: ${title}`;
 }
 
+export function stripTaskIdTitle(taskId, title) {
+  const prefix = `${taskId}: `;
+  return title.startsWith(prefix) ? title.slice(prefix.length) : title;
+}
+
+export function serializePlanningFilters(filters) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, values]) => values.length > 0),
+  );
+}
+
+export function getDependencySuggestionConfidencePresentation(suggestion) {
+  return {
+    className: "dependency-suggestion-confidence",
+    level: suggestion.confidenceLabel,
+    text: `Confidence: ${suggestion.confidenceLabel} (${Math.round(suggestion.confidence * 100)}%)`,
+  };
+}
+
 export function getCardPresentation(task, config, detailsCollapsed = false) {
   const source = sourceForTask(task, config);
   const detailSections = [];

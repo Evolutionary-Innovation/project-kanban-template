@@ -15,6 +15,18 @@ async function createWorkspace(t) {
   return createTestWorkspace(t);
 }
 
+async function startTestServer(context, handler) {
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  context.after(() => new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    server.closeAllConnections?.();
+  }));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  return `http://127.0.0.1:${address.port}`;
+}
+
 test("serves mutation results and maps stale revisions to HTTP 409", async (context) => {
   const handler = await createBoardRequestHandler({
     loadBoard: async () => ({ tasks: [] }),
@@ -74,6 +86,7 @@ test("serves mutation results and maps stale revisions to HTTP 409", async (cont
 
 test("serves read-only planning routes without invoking task mutations", async (context) => {
   let taskMutationCalls = 0;
+  let planningContextCalls = 0;
   let requestedView;
   const handler = await createBoardRequestHandler({
     loadBoard: async () => ({ tasks: [] }),
@@ -81,7 +94,10 @@ test("serves read-only planning routes without invoking task mutations", async (
     createTask: async () => { taskMutationCalls += 1; },
     editTask: async () => { taskMutationCalls += 1; },
     deleteTask: async () => { taskMutationCalls += 1; },
-    getPlanningContext: async () => ({ schemaVersion: 1, board: { totalTaskCount: 0 } }),
+    getPlanningContext: async () => {
+      planningContextCalls += 1;
+      return { schemaVersion: 1, board: { totalTaskCount: 0 } };
+    },
     requestNextWork: async (currentView) => {
       requestedView = currentView;
       return {
@@ -109,6 +125,11 @@ test("serves read-only planning routes without invoking task mutations", async (
     board: { totalTaskCount: 0 },
   });
 
+  const unsupportedContextMethod = await fetch(`${origin}/api/planning-context`, { method: "POST" });
+  assert.equal(unsupportedContextMethod.status, 405);
+  assert.equal(unsupportedContextMethod.headers.get("allow"), "GET");
+  assert.equal(planningContextCalls, 1);
+
   const currentView = {
     activeView: "kanban",
     searchActive: false,
@@ -129,6 +150,17 @@ test("serves read-only planning routes without invoking task mutations", async (
   });
   assert.deepEqual(requestedView, currentView);
 
+  const unsupportedSuggestionMethod = await fetch(`${origin}/api/planning/suggest`);
+  assert.equal(unsupportedSuggestionMethod.status, 405);
+  assert.equal(unsupportedSuggestionMethod.headers.get("allow"), "POST");
+
+  const nonJson = await fetch(`${origin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: origin, "Content-Type": "text/plain" },
+    body: JSON.stringify({ currentView }),
+  });
+  assert.equal(nonJson.status, 415);
+
   const extraInput = await fetch(`${origin}/api/planning/suggest`, {
     method: "POST",
     headers: { Origin: origin, "Content-Type": "application/json" },
@@ -144,6 +176,50 @@ test("serves read-only planning routes without invoking task mutations", async (
   });
   assert.equal(crossOrigin.status, 403);
   assert.equal(taskMutationCalls, 0);
+});
+
+test("reports unavailable and malformed current-session planning integrations", async (context) => {
+  const unavailableHandler = await createBoardRequestHandler({
+    loadBoard: async () => ({ tasks: [] }),
+    moveTask: async () => ({}),
+    createTask: async () => ({}),
+    editTask: async () => ({}),
+    deleteTask: async () => ({}),
+    getPlanningContext: async () => ({}),
+  });
+  const unavailableOrigin = await startTestServer(context, unavailableHandler);
+  const unavailable = await fetch(`${unavailableOrigin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: unavailableOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ currentView: null }),
+  });
+  assert.equal(unavailable.status, 503);
+
+  const malformedHandler = await createBoardRequestHandler({
+    loadBoard: async () => ({ tasks: [] }),
+    moveTask: async () => ({}),
+    createTask: async () => ({}),
+    editTask: async () => ({}),
+    deleteTask: async () => ({}),
+    requestNextWork: async () => {
+      throw Object.assign(new Error("Agent returned malformed JSON."), {
+        code: "planning_response_invalid",
+        rawAnswer: "not json",
+      });
+    },
+  });
+  const malformedOrigin = await startTestServer(context, malformedHandler);
+  const malformed = await fetch(`${malformedOrigin}/api/planning/suggest`, {
+    method: "POST",
+    headers: { Origin: malformedOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ currentView: null }),
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(await malformed.json(), {
+    error: "Agent returned malformed JSON.",
+    code: "planning_response_invalid",
+    rawAnswer: "not json",
+  });
 });
 
 test("applies completion lifecycle through edit and move API routes", async (context) => {

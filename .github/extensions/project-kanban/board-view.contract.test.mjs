@@ -5,9 +5,12 @@ import { parseBoardDocuments } from "./board-data.mjs";
 import {
   filterTasks,
   getCardPresentation,
+  getDependencySuggestionConfidencePresentation,
   hasActiveTaskFilters,
   isManualOrderView,
+  serializePlanningFilters,
   sortTasks,
+  stripTaskIdTitle,
 } from "./board-view.mjs";
 import { testConfig, testDocuments } from "./test-fixtures.mjs";
 
@@ -70,4 +73,26 @@ test("sorts a view without mutating canonical order and retains lifecycle labels
     { label: "Last completed", value: "2026-01-03" },
   ]);
   assert.ok(collapsed.detailSections.length > 0);
+});
+
+test("serializes configured planning filters and renders task titles and confidence consistently", () => {
+  assert.deepEqual(serializePlanningFilters({
+    source: ["roadmap"],
+    executionType: ["Research"],
+    status: [],
+  }), {
+    source: ["roadmap"],
+    executionType: ["Research"],
+  });
+
+  assert.equal(stripTaskIdTitle("RM-001", "RM-001: Improve reliability"), "Improve reliability");
+  assert.equal(stripTaskIdTitle("RM-001", "Improve reliability"), "Improve reliability");
+  assert.deepEqual(getDependencySuggestionConfidencePresentation({
+    confidence: 0.82,
+    confidenceLabel: "Medium",
+  }), {
+    className: "dependency-suggestion-confidence",
+    level: "Medium",
+    text: "Confidence: Medium (82%)",
+  });
 });

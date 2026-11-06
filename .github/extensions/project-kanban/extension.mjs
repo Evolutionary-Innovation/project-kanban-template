@@ -4,11 +4,9 @@ import { fileURLToPath } from "node:url";
 import { CanvasError, createCanvas, joinSession } from "@github/copilot-sdk/extension";
 import { createBoardRequestHandler } from "./board-server.mjs";
 import {
-  buildNextWorkPrompt,
   buildPlanningContext,
   buildPlanningCoverage,
-  parsePlanningAnswer,
-  PlanningError,
+  queryCurrentSessionPlan,
   readPlanningDocuments,
 } from "./planning-context.mjs";
 import {
@@ -53,16 +51,7 @@ function createRuntime(workspaceRoot, config) {
 
   async function requestNextWork(currentView) {
     const context = await getPlanningContext(currentView);
-    const ui = copilotSession.rpc?.ui;
-    if (typeof ui?.ephemeralQuery !== "function") {
-      throw new PlanningError(
-        "planning_unavailable",
-        "The current Copilot host does not support transient planning queries.",
-      );
-    }
-
-    const result = await ui.ephemeralQuery({ question: buildNextWorkPrompt(context) });
-    const plan = parsePlanningAnswer(result?.answer, context);
+    const plan = await queryCurrentSessionPlan(copilotSession, context);
     return {
       contextGeneratedAt: context.generatedAt,
       boardSnapshotAt: context.boardSnapshotAt,
@@ -302,4 +291,4 @@ const kanbanCanvas = createCanvas({
   onClose: closeInstance,
 });
 
-await joinSession({ canvases: [kanbanCanvas] });
+const copilotSession = await joinSession({ canvases: [kanbanCanvas] });

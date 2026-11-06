@@ -3,12 +3,19 @@ import {
   compareCanonicalTaskOrder,
   filterTasks,
   getCardPresentation,
+  getDependencySuggestionConfidencePresentation,
   getWorkflowSummary,
   hasActiveTaskFilters,
   isManualOrderView,
   matchesTaskView,
+  serializePlanningFilters,
   sortTasks,
+  stripTaskIdTitle,
 } from "./board-view.mjs";
+import {
+  claimPendingSuggestionApproval,
+  closestElementFromEventTarget,
+} from "./board-client-interactions.mjs";
 
 const PLANNING_ROUTE_RELATIONSHIPS = Object.freeze({
   recorded_prerequisite: "recorded prerequisite",
@@ -61,6 +68,7 @@ let boardSnapshot = null;
 let dismissedSuggestionScope = "";
 let dismissedSuggestionIds = new Set();
 let dependencySuggestionsExpanded = false;
+const pendingSuggestionApprovalIds = new Set();
 let draggedTaskId = null;
 let dialogMode = null;
 const collapsedTaskIds = new Set();
@@ -145,9 +153,15 @@ function renderDependencySuggestions() {
       stripTaskIdTitle(suggestion.prerequisiteTaskId, suggestion.prerequisiteTaskTitle);
 
     const metadata = document.createElement("p");
-    metadata.textContent =
-      `Found in ${suggestion.field} via “${suggestion.relationshipPhrase}” · ` +
-      `Confidence: ${suggestion.confidenceLabel} (${Math.round(suggestion.confidence * 100)}%)`;
+    const confidencePresentation = getDependencySuggestionConfidencePresentation(suggestion);
+    const confidence = document.createElement("span");
+    confidence.className = confidencePresentation.className;
+    confidence.dataset.confidence = confidencePresentation.level;
+    confidence.textContent = confidencePresentation.text;
+    metadata.append(
+      `Found in ${suggestion.field} via “${suggestion.relationshipPhrase}” · `,
+      confidence,
+    );
 
     const evidence = document.createElement("blockquote");
     evidence.textContent = suggestion.evidence;
@@ -164,6 +178,7 @@ function renderDependencySuggestions() {
       button.dataset.suggestionAction = action;
       button.dataset.suggestionId = suggestion.id;
       button.textContent = label;
+      button.disabled = action === "approve" && pendingSuggestionApprovalIds.has(suggestion.id);
       actions.append(button);
     }
 
@@ -215,11 +230,6 @@ function appendTag(parent, label, className = "") {
 
 function sourceForTask(task) {
   return boardSnapshot.config.sources.find(({ path }) => path === task.source.document);
-}
-
-function stripTaskIdTitle(taskId, title) {
-  const prefix = `${taskId}: `;
-  return title.startsWith(prefix) ? title.slice(prefix.length) : title;
 }
 
 function canonicalTaskOrder(left, right) {
@@ -1068,7 +1078,7 @@ function setAllCardsCollapsed(collapsed) {
 }
 
 boardElement.addEventListener("dragstart", (event) => {
-  const item = event.target.closest("[data-task-id]");
+  const item = closestElementFromEventTarget(event.target, "[data-task-id]");
   if (!item || !event.dataTransfer || !item.draggable || !canReorderColumn(item.dataset.status)) {
     event.preventDefault();
     return;
@@ -1087,14 +1097,14 @@ boardElement.addEventListener("dragend", () => {
 });
 
 boardElement.addEventListener("dragover", (event) => {
-  const column = event.target.closest(".board-column");
+  const column = closestElementFromEventTarget(event.target, ".board-column");
   if (!column || !draggedTaskId || !canReorderColumn(column.dataset.status)) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
 });
 
 boardElement.addEventListener("drop", (event) => {
-  const column = event.target.closest(".board-column");
+  const column = closestElementFromEventTarget(event.target, ".board-column");
   const draggedTask = boardSnapshot?.tasks.find((task) => task.id === draggedTaskId);
   if (
     !column ||
@@ -1105,7 +1115,7 @@ boardElement.addEventListener("drop", (event) => {
   ) return;
   event.preventDefault();
 
-  const target = event.target.closest("[data-task-id]");
+  const target = closestElementFromEventTarget(event.target, "[data-task-id]");
   const taskId = event.dataTransfer?.getData("text/plain") || draggedTaskId;
   if (target?.dataset.taskId === taskId) return;
   let insertionIndex = Number.POSITIVE_INFINITY;
@@ -1124,12 +1134,12 @@ boardElement.addEventListener("drop", (event) => {
 });
 
 boardElement.addEventListener("dragenter", (event) => {
-  const column = event.target.closest(".board-column");
+  const column = closestElementFromEventTarget(event.target, ".board-column");
   if (column && canReorderColumn(column.dataset.status)) column.classList.add("is-drop-target");
 });
 
 boardElement.addEventListener("dragleave", (event) => {
-  const column = event.target.closest(".board-column");
+  const column = closestElementFromEventTarget(event.target, ".board-column");
   if (column && !column.contains(event.relatedTarget)) column.classList.remove("is-drop-target");
 });
 
@@ -1164,11 +1174,12 @@ async function refreshBoard() {
 }
 
 function currentPlanningView() {
-  const filters = Object.fromEntries(
-    ["source", "status", "priority", "category", "area", "dependency"]
-      .map((key) => [key, viewState[key]])
-      .filter(([, values]) => values.length > 0),
-  );
+  const filters = serializePlanningFilters(Object.fromEntries(
+    [...filterControlsByKey].map(([key, control]) => [
+      key,
+      selectedFilterOptions(control).map(({ value }) => value),
+    ]),
+  ));
   return {
     activeView,
     searchActive: Boolean(viewState.search),
@@ -1535,7 +1546,7 @@ for (const control of filterControls) {
     control.querySelector("summary").focus();
   });
   control.querySelector(".filter-options").addEventListener("change", (event) => {
-    if (!event.target.matches('input[type="checkbox"]')) return;
+    if (!closestElementFromEventTarget(event.target, 'input[type="checkbox"]')) return;
     const key = control.dataset.filter;
     viewState[key] = selectedFilterOptions(control).map(({ value }) => value);
     updateFilterSummary(control);
@@ -1544,7 +1555,7 @@ for (const control of filterControls) {
   });
 }
 activeFilterChips.addEventListener("click", (event) => {
-  const chip = event.target.closest(".filter-chip");
+  const chip = closestElementFromEventTarget(event.target, ".filter-chip");
   if (!chip) return;
   const control = filterControlsByKey.get(chip.dataset.filterKey);
   if (!control) return;
@@ -1579,9 +1590,7 @@ dependencySuggestionsButton.addEventListener("click", () => {
   renderDependencySuggestions();
 });
 dependencySuggestionsList.addEventListener("click", (event) => {
-  const button = event.target instanceof Element
-    ? event.target.closest("button[data-suggestion-action]")
-    : null;
+  const button = closestElementFromEventTarget(event.target, "button[data-suggestion-action]");
   if (!button) return;
 
   const suggestion = boardSnapshot?.dependencySuggestions.find(({ id }) => id === button.dataset.suggestionId);
@@ -1597,15 +1606,17 @@ dependencySuggestionsList.addEventListener("click", (event) => {
     return;
   }
   if (button.dataset.suggestionAction === "approve") {
+    if (!claimPendingSuggestionApproval(pendingSuggestionApprovalIds, suggestion.id)) return;
     button.disabled = true;
     void approveDependencySuggestion(suggestion).finally(() => {
-      if (button.isConnected) button.disabled = false;
+      pendingSuggestionApprovalIds.delete(suggestion.id);
+      renderDependencySuggestions();
     });
   }
 });
 orderingHint.hidden = true;
 createActionsElement.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-create]");
+  const button = closestElementFromEventTarget(event.target, "[data-create]");
   if (button) openTaskDialog("create", button.dataset.create);
 });
 taskForm.addEventListener("submit", (event) => void submitTaskForm(event));

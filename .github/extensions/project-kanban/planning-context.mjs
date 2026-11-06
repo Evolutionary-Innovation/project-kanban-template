@@ -956,3 +956,16 @@ export function buildNextWorkPrompt(context) {
     JSON.stringify(context),
   ].join("\n\n");
 }
+
+export async function queryCurrentSessionPlan(session, context) {
+  const ui = session?.rpc?.ui;
+  if (typeof ui?.ephemeralQuery !== "function") {
+    throw new PlanningError(
+      "planning_unavailable",
+      "The current Copilot host does not support transient planning queries.",
+    );
+  }
+
+  const result = await ui.ephemeralQuery({ question: buildNextWorkPrompt(context) });
+  return parsePlanningAnswer(result?.answer, context);
+}

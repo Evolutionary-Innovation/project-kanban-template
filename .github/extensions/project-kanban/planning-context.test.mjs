@@ -9,6 +9,7 @@ import {
   buildPlanningCoverage,
   parsePlanningAnswer,
   PlanningError,
+  queryCurrentSessionPlan,
   readPlanningDocuments,
 } from "./planning-context.mjs";
 
@@ -393,6 +394,52 @@ test("discloses missing explicit goals without promoting descriptions into goals
     line: 3,
     text: "A dashboard for market data.",
   }]);
+});
+
+test("rejects unknown board views and unknown planning filter values", () => {
+  assert.throws(
+    () => createContext({
+      activeView: "timeline",
+      searchActive: false,
+      filters: {},
+      revealedTaskId: null,
+    }),
+    (error) => error instanceof PlanningError && error.code === "planning_context_invalid",
+  );
+  assert.throws(
+    () => createContext({
+      activeView: "kanban",
+      searchActive: false,
+      filters: { status: ["Unknown"] },
+      revealedTaskId: null,
+    }),
+    (error) => error instanceof PlanningError && error.code === "planning_context_invalid",
+  );
+});
+
+test("uses the supplied Copilot session for transient planning queries", async () => {
+  const context = createContext();
+  const requests = [];
+  const session = {
+    rpc: {
+      ui: {
+        ephemeralQuery: async (request) => {
+          requests.push(request);
+          return { answer: validAnswer() };
+        },
+      },
+    },
+  };
+
+  const plan = await queryCurrentSessionPlan(session, context);
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].question, buildNextWorkPrompt(context));
+  assert.equal(plan.recommendation.taskId, "TD-001");
+  await assert.rejects(
+    queryCurrentSessionPlan({}, context),
+    (error) => error instanceof PlanningError && error.code === "planning_unavailable",
+  );
 });
 
 test("preserves expanded reasoning and multi-task routes without changing canonical dependencies", () => {

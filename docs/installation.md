@@ -11,9 +11,9 @@
 
 ## Host support and releases
 
-The currently verified host is the VS Code Copilot SDK canvas host exercised in this workspace. The exact host build was not captured during this assessment and must be recorded when validating a release candidate. Any other host or host/version combination is not yet validated and has no compatibility guarantee until explicitly tested and listed in a release. Support is never inferred from SDK similarity.
+The verified host is VS Code 1.144.0 x64 on Linux (build `2c33b50b16c472efe58357d1d2a8a5414bc23fbf`), validated against candidate commit `190aefb22133ba84891f46e67b0cb25c1842a280`. The Copilot SDK version was not independently exposed. Any other host or host/version combination is not yet validated and has no compatibility guarantee until explicitly tested and listed in a release. Support is never inferred from SDK similarity.
 
-The first authoritative release may be scoped to the verified host; additional-host work tracked by RM-001 and RA-001 remains open and does not block that limited scope. See the [release and consumer synchronisation contract](release-governance.md) for versioning, validation, adoption, and rollback.
+The first authoritative release may be scoped to the verified host; additional-host work tracked by RM-001 remains open and does not block that limited scope. See the [release and consumer synchronisation contract](release-governance.md) for versioning, validation, adoption, and rollback.
 
 The extension reads and writes only the configured workspace-relative Markdown files. It stores no task database or private board state.
 

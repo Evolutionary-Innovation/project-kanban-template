@@ -47,12 +47,12 @@ Support is specific to the host product/version and capabilities actually verifi
 
 | Host scope | Current assessment |
 |---|---|
-| VS Code Copilot SDK canvas host exercised in this workspace | Verified for canvas loading, board refresh, and normal board actions in the current environment. The exact host build was not captured during this assessment and must be recorded when validating a release candidate. |
+| VS Code 1.144.0 x64 on Linux (build `2c33b50b16c472efe58357d1d2a8a5414bc23fbf`) | Verified against candidate commit `190aefb22133ba84891f46e67b0cb25c1842a280` for canvas loading, board refresh, and normal board actions. The synthetic browser fixture loaded all 60 fictional records with no console errors and unchanged fixture hashes. The Copilot SDK version was not independently exposed. |
 | Any other host or host/version combination | Not yet validated and unsupported for compatibility guarantees until explicitly verified. |
 
 Before a release claims a host, validate extension discovery and canvas opening, workspace-root resolution, board refresh, and the core task mutation path using disposable task data. Verify locking, revisions, conflict reporting, and persistence behavior through the applicable automated tests. Record the host product/build, SDK version when available, operating system, release commit, tested capabilities, and results. Optional capabilities such as the experimental planning query must be listed separately; their absence must not be presented as verified support.
 
-RM-001 and RA-001 track additional-host validation. They remain open until that work is complete, but they do not block a release whose compatibility statement is explicitly limited to the currently verified host. A release must never imply support for an unverified host.
+RM-001 tracks additional-host validation. It remains open until that work is complete, but it does not block a release whose compatibility statement is explicitly limited to the currently verified host. A release must never imply support for an unverified host.
 
 ## Authoritative release process
 

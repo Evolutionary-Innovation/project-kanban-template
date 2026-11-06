@@ -19,4 +19,4 @@ Actionable follow-ups belong in the table. If another source already owns the wo
 <!-- project-kanban-schema:1 -->
 | ID | Title | Status | Priority | Order | Area | Category | Details | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| RA-001 | Verify supported-host extension loading | Planned | Medium | 100 | Compatibility | Research/Audit | Validate the workspace extension contract in each intended Copilot host. |  |  |  |  |  |  |  |  |  |
+<!-- project-kanban-id-sequence:RA:2 -->

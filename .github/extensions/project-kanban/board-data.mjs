@@ -444,7 +444,7 @@ export function validateTaskDraft(sourceKey, draft, config) {
     throw new TypeError("Task fields must be an object.");
   }
 
-  const fields = ["title", "area", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)];
+  const fields = ["title", "area", "category", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)];
   const requiredFields = [
     "title",
     "area",
@@ -461,6 +461,10 @@ export function validateTaskDraft(sourceKey, draft, config) {
   }
   if (typeof draft.area !== "string" || draft.area.trim() === "" || draft.area.length > 100) {
     throw new TypeError("Area must be a non-empty string of at most 100 characters.");
+  }
+  const category = Object.hasOwn(draft, "category") ? draft.category : source.category;
+  if (typeof category !== "string" || category.trim() === "" || category.length > 100) {
+    throw new TypeError("Category must be a non-empty string of at most 100 characters.");
   }
   if (!config.priorities.some(({ name }) => name === draft.priority)) {
     throw new TypeError("Priority is not supported.");
@@ -486,7 +490,7 @@ export function validateTaskDraft(sourceKey, draft, config) {
 
   return {
     ...Object.fromEntries(fields.map((field) => [field, (normalizedDraft[field] ?? "").trim()])),
-    category: source.category,
+    category: category.trim(),
     source: { document: source.path, section: "Kanban tasks", schemaVersion: TASK_SCHEMA_VERSION },
   };
 }

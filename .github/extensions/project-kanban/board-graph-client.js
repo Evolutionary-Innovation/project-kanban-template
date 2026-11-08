@@ -312,7 +312,12 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       inspector.append(hint);
       return;
     }
+
+    const downstreamIds = node.unresolved
+      ? []
+      : getDownstreamTaskIds(latestSnapshot.dependencyGraph, node.id);
     const metadata = document.createElement("dl");
+    metadata.className = "graph-inspector-metadata";
     const workflowLabels = {
       ready: "Dependency-ready (advisory)",
       blocked: "Blocked by dependencies",
@@ -324,6 +329,11 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       ["Status", node.status], ["Priority", node.priority], ["Category", node.category],
       ["Area", node.area], ["Execution Type", node.executionType],
       ["Dependency readiness", workflowLabels[node.workflowState]],
+      ...(!node.unresolved
+        ? [["Downstream impact", downstreamIds.length
+          ? `${downstreamIds.length} unique dependent task${downstreamIds.length === 1 ? "" : "s"}`
+          : "No dependent tasks"]]
+        : []),
       ...node.dates.map(({ label, value }) => [label, value]),
     ]) {
       if (!value) continue;
@@ -334,40 +344,45 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       metadata.append(term, detail);
     }
     inspector.append(metadata);
-    if (!node.unresolved) {
-      const downstreamIds = getDownstreamTaskIds(latestSnapshot.dependencyGraph, node.id);
-      const workflow = document.createElement("section");
-      workflow.className = "graph-inspector-dependency-details";
-      workflow.tabIndex = -1;
-      const workflowHeading = document.createElement("h4");
-      const readiness = document.createElement("p");
-      const downstream = document.createElement("p");
-      workflowHeading.textContent = "Workflow intelligence";
-      readiness.textContent = node.workflowState === "ready"
-        ? "Dependency-ready: all prerequisites are complete and resolved."
-        : node.workflowState === "blocked"
-          ? `Blocked by ${node.blockedBy.length} prerequisite${node.blockedBy.length === 1 ? "" : "s"}.`
-          : node.workflowState === "review"
-            ? "Dependency cycle requires review before this work is considered ready."
-            : "This task is complete.";
-      downstream.textContent = downstreamIds.length
-        ? `Downstream impact: ${downstreamIds.length} unique dependent task${downstreamIds.length === 1 ? "" : "s"}.`
-        : "Downstream impact: no dependent tasks.";
-      workflow.append(workflowHeading, readiness, downstream);
-      if (node.isCriticalPath) {
-        const pathNote = document.createElement("p");
-        pathNote.textContent = "Part of the longest unweighted dependency chain; this is not a duration-based critical path.";
-        workflow.append(pathNote);
+
+    const contentGrid = document.createElement("div");
+    contentGrid.className = "graph-inspector-content-grid";
+
+    const taskDetails = document.createElement("section");
+    taskDetails.className = "graph-inspector-task-details";
+    const taskDetailsHeading = document.createElement("h4");
+    taskDetailsHeading.textContent = "Task details";
+    taskDetails.append(taskDetailsHeading);
+    if (node.details.length) {
+      for (const { label, value } of node.details) {
+        const detailSection = document.createElement("section");
+        const title = document.createElement("h5");
+        const content = document.createElement("p");
+        title.textContent = label;
+        content.textContent = value;
+        detailSection.append(title, content);
+        taskDetails.append(detailSection);
       }
-      inspector.append(workflow);
+    } else {
+      const emptyDetails = document.createElement("p");
+      emptyDetails.textContent = "No additional task details.";
+      taskDetails.append(emptyDetails);
     }
+
+    const dependencyDetails = document.createElement("section");
+    dependencyDetails.className = "graph-inspector-dependency-details";
+    dependencyDetails.tabIndex = -1;
+    const dependencyHeading = document.createElement("h4");
+    dependencyHeading.textContent = "Dependencies";
+    dependencyDetails.append(dependencyHeading);
+
     if (node.hasCycle || node.unresolved) {
       const warning = document.createElement("p");
       warning.className = "graph-warning-text";
       warning.textContent = node.unresolved
         ? "This ID is referenced but no task exists. It cannot be edited."
         : "Dependency cycle detected. Review this task's prerequisite links on the board.";
-      inspector.append(warning);
+      dependencyDetails.append(warning);
     }
     const prerequisites = model.edges.filter(({ target }) => target === node.id).map(({ source }) => source);
     const dependents = model.edges.filter(({ source }) => source === node.id).map(({ target }) => target);
@@ -379,7 +394,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       relationshipList("Blocked By", node.blockedBy),
       relationshipList(node.unresolved ? "Referenced by" : "Direct dependents", dependents),
     );
-    inspector.append(relationships);
+    dependencyDetails.append(relationships);
     if (!showCompletedWork && !node.unresolved) {
       const completionStatus = latestSnapshot.config.completionStatus;
       const hiddenRelationships = latestSnapshot.dependencyGraph.edges.flatMap(({ source, target }) => {
@@ -398,18 +413,18 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
         title.textContent = "Completed relationships hidden from diagram";
         content.textContent = `${[...new Set(hiddenRelationships)].join(", ")}. Show completed work to see the full dependency paths.`;
         hiddenContext.append(title, content);
-        inspector.append(hiddenContext);
+        dependencyDetails.append(hiddenContext);
       }
     }
-    for (const { label, value } of node.details) {
-      const section = document.createElement("section");
-      const title = document.createElement("h4");
-      const content = document.createElement("p");
-      title.textContent = label;
-      content.textContent = value;
-      section.append(title, content);
-      inspector.append(section);
+
+    if (node.isCriticalPath) {
+      const pathNote = document.createElement("p");
+      pathNote.textContent = "Part of the longest unweighted dependency chain; this is not a duration-based critical path.";
+      dependencyDetails.append(pathNote);
     }
+
+    contentGrid.append(taskDetails, dependencyDetails);
+    inspector.append(contentGrid);
   }
 
   function selectNode(id, focus = false) {

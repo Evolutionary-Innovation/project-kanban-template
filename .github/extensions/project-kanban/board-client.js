@@ -890,10 +890,11 @@ async function moveTaskToStatus(taskId, status) {
 }
 
 function createField(name, labelText, value = "", options = {}) {
+  const field = document.createElement("div");
+  field.className = `task-field${options.fullWidth ? " full-width" : ""}`;
   const label = document.createElement("label");
-  label.className = `task-field${options.fullWidth ? " full-width" : ""}`;
+  label.htmlFor = `task-field-${name}`;
   label.textContent = labelText;
-
   let control;
   if (options.choices) {
     control = document.createElement("select");
@@ -920,11 +921,102 @@ function createField(name, labelText, value = "", options = {}) {
     control.value = value;
   }
   control.name = name;
+  control.id = label.htmlFor;
   if (options.placeholder) control.placeholder = options.placeholder;
   if (options.required) control.required = true;
   if (options.maxLength) control.maxLength = options.maxLength;
-  label.append(control);
-  return label;
+  field.append(label, control);
+
+  if (options.suggestions?.length) {
+    const datalist = document.createElement("datalist");
+    datalist.id = `${control.id}-suggestions`;
+    control.setAttribute("list", datalist.id);
+    for (const suggestion of options.suggestions) {
+      const option = document.createElement("option");
+      option.value = suggestion;
+      datalist.append(option);
+    }
+    field.append(datalist);
+  }
+  if (options.dependencyTasks) field.append(createDependencyPicker(control, options.dependencyTasks));
+  return field;
+}
+
+function createDependencyPicker(control, tasks) {
+  const picker = document.createElement("div");
+  picker.className = "task-dependency-picker";
+  const search = document.createElement("input");
+  search.type = "search";
+  search.className = "task-dependency-search";
+  search.autocomplete = "off";
+  search.placeholder = "Search tasks by ID or title";
+  search.setAttribute("aria-label", "Search tasks to add as dependencies");
+  const options = document.createElement("div");
+  options.className = "task-dependency-options";
+  options.setAttribute("role", "group");
+  options.setAttribute("aria-label", "Available dependency tasks");
+  const entries = [];
+
+  function syncSelectedTasks() {
+    const selected = new Set(control.value.split(",").map((id) => id.trim()).filter(Boolean));
+    for (const entry of entries) entry.checkbox.checked = selected.has(entry.task.id);
+  }
+
+  for (const task of tasks) {
+    const label = document.createElement("label");
+    label.className = "task-dependency-option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = task.id;
+    const description = document.createElement("span");
+    description.textContent = `${task.id}: ${task.title}`;
+    label.append(checkbox, description);
+    options.append(label);
+    entries.push({ label, checkbox, task });
+    checkbox.addEventListener("change", () => {
+      const ids = control.value.split(",").map((id) => id.trim()).filter(Boolean);
+      const selected = new Set(ids);
+      if (checkbox.checked) selected.add(task.id);
+      else selected.delete(task.id);
+      control.value = [...selected].join(", ");
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  control.addEventListener("input", syncSelectedTasks);
+  search.addEventListener("input", () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    for (const entry of entries) {
+      const searchable = `${entry.task.id} ${entry.task.title}`.toLocaleLowerCase();
+      entry.label.hidden = query !== "" && !searchable.includes(query);
+    }
+  });
+  syncSelectedTasks();
+  picker.append(search, options);
+  return picker;
+}
+
+function localDateOnly() {
+  const now = new Date();
+  const year = String(now.getFullYear()).padStart(4, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createTaskFormSection(title, fields) {
+  if (fields.length === 0) return null;
+  const section = document.createElement("fieldset");
+  section.className = "task-form-section";
+  const legend = document.createElement("legend");
+  legend.textContent = title;
+  const grid = document.createElement("div");
+  grid.className = "task-form-section-fields";
+  for (const [name, label, value, options] of fields) {
+    grid.append(createField(name, label, value, options));
+  }
+  section.append(legend, grid);
+  return section;
 }
 
 function openTaskDialog(mode, taskType, task = null) {
@@ -939,10 +1031,24 @@ function openTaskDialog(mode, taskType, task = null) {
   taskDialogTitle.textContent = mode === "create" ? `Create ${source.label}` : `Edit ${task.title}`;
   saveTaskButton.textContent = mode === "create" ? "Create task" : "Save changes";
 
-  const fields = [
+  const areas = [...new Set(boardSnapshot.tasks.map(({ area }) => area).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const categories = [...new Set([
+    source.category,
+    ...boardSnapshot.tasks.map(({ category }) => category).filter(Boolean),
+  ])].sort((a, b) => a.localeCompare(b));
+  const taskFields = [
     ["title", "Title", task?.title ?? "", { required: true, maxLength: 200 }],
-    ["area", "Area", task?.area ?? "", { required: true, maxLength: 100 }],
-    ...(mode === "edit" ? [["category", "Category", task.category, { required: true, maxLength: 100 }]] : []),
+    ["area", "Area", task?.area ?? "", {
+      required: true, maxLength: 100, suggestions: areas,
+    }],
+    ["category", "Category", task?.category ?? source.category, {
+      required: true, maxLength: 100, suggestions: categories,
+    }],
+    ["details", "Details", task?.details ?? "", {
+      multiline: true, maxLength: 5000, fullWidth: true,
+    }],
+  ];
+  const workflowFields = [
     ["priority", "Priority", task?.priority ?? boardSnapshot.config.priorities[0].name, {
       required: true,
       choices: boardSnapshot.config.priorities.map(({ name }) => name),
@@ -951,25 +1057,41 @@ function openTaskDialog(mode, taskType, task = null) {
       required: true,
       choices: boardSnapshot.config.statuses,
     }],
-    ["details", "Details", task?.details ?? "", { multiline: true, maxLength: 5000, fullWidth: true }],
-    ...source.extraFields.map((field) => [
-      field.key,
-      field.label,
-      task?.[field.key] ?? "",
-      {
-        required: field.required,
-        maxLength: field.type === "date" ? undefined : field.maxLength,
-        inputType: field.type === "date" ? "date" : undefined,
-        choices: field.choices,
-        placeholder: field.type === "task-ids" ? "RM-019, TD-03" : undefined,
-        multiline: field.type === "textarea",
-        fullWidth: field.type === "textarea" || field.type === "task-ids",
-      },
-    ]),
   ];
 
-  for (const [name, label, value, options] of fields) {
-    taskFormFields.append(createField(name, label, value, options));
+  const dependencyFields = [];
+  const additionalFields = [];
+  for (const field of source.extraFields) {
+    let value = task?.[field.key] ?? "";
+    if (mode === "create" && field.key === "createdDate" && field.type === "date" && !value) {
+      value = localDateOnly();
+    }
+    const options = {
+      required: field.required,
+      maxLength: field.type === "date" ? undefined : field.maxLength,
+      inputType: field.type === "date" ? "date" : undefined,
+      choices: field.choices,
+      placeholder: field.type === "task-ids" ? "RM-019, TD-03" : undefined,
+      multiline: field.type === "textarea",
+      fullWidth: field.type === "textarea" || field.type === "task-ids",
+      ...(field.type === "task-ids"
+        ? { dependencyTasks: boardSnapshot.tasks.filter(({ id }) => id !== task?.id) }
+        : {}),
+    };
+    const descriptor = [field.key, field.label, value, options];
+    if (field.type === "task-ids") dependencyFields.push(descriptor);
+    else if (["createdDate", "completionDate", "executionType"].includes(field.key)) workflowFields.push(descriptor);
+    else additionalFields.push(descriptor);
+  }
+
+  for (const [title, fields] of [
+    ["Task details", taskFields],
+    ["Workflow", workflowFields],
+    ["Dependencies", dependencyFields],
+    ["Additional fields", additionalFields],
+  ]) {
+    const section = createTaskFormSection(title, fields);
+    if (section) taskFormFields.append(section);
   }
   taskDialog.showModal();
   taskFormFields.querySelector("input, select, textarea")?.focus();

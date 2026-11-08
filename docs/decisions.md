@@ -154,3 +154,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Infer the root from repository or extension names, assume a fixed parent depth, use `process.cwd()`, place locks beside each runtime copy, or add configurable lock identity without a demonstrated need.
 - **Decision:** Prefer the host-provided workspace directory when available; otherwise use bounded canonical-config discovery. Reject missing, invalid, or ambiguous roots and pass the resolved root through runtime components. Derive lock identity from that workspace root, not from the extension installation location; preserve the established lock path and transaction behavior.
 - **Consequences:** Renaming a repository or relocating the extension does not change workspace identity. Runtime copies for one workspace coordinate through the same exclusive lock, and separate workspaces remain isolated. Schema v1, revision checks, atomic replacement, conflict behavior, and fail-closed handling of an abandoned lock remain unchanged. See [architecture](architecture.md#data-flow) and the [release governance contract](release-governance.md).
+
+## ADR-18: Keep task-entry improvements configuration-driven
+
+- **Status:** Accepted
+- **Observations:** Area and Category are task fields that users may need to vary per task, while source configuration supplies useful defaults and suggestions. Configured extra fields already support project-specific text such as Acceptance Criteria, and task-ID fields already define the canonical dependency representation.
+- **Assumptions:** Existing clients may omit Category when creating tasks and must continue to receive the source-configured value. Suggestions should aid entry without restricting new values or replacing validation.
+- **Alternatives considered:** Keep Category fixed to the source on creation, add Acceptance Criteria to every task schema, or introduce a new schema version and persistence model for the form.
+- **Decision:** Use the same configuration-driven form for create and edit. Accept an optional Category in create drafts and fall back to the configured source Category when omitted; keep Acceptance Criteria as an optional configured textarea; keep dependency selection as an assistive picker over the existing task-ID field and comma-separated value.
+- **Consequences:** The schema-v1 task model and Markdown table format remain unchanged. Existing clients remain compatible, and all writes continue through the existing validation, revision, lock, and atomic replacement path.

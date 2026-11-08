@@ -9,6 +9,9 @@ const fixtureRoot = fileURLToPath(new URL("../../../../examples/synthetic-browse
 
 test("parses the isolated synthetic browser fixture and its UX data distributions", async () => {
   const config = await readBoardConfig(fixtureRoot);
+  assert.ok(config.sources.every((source) =>
+    source.extraFields.some(({ key, label, type, required }) =>
+      key === "acceptanceCriteria" && label === "Acceptance Criteria" && type === "textarea" && !required)));
   const documents = Object.fromEntries(
     await Promise.all(
       config.sources.map(async (source) => [source.path, await readFile(`${fixtureRoot}/${source.path}`, "utf8")]),

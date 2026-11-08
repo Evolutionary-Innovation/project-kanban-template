@@ -900,7 +900,7 @@ h1 span {
 
 .graph-inspector {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 14px 20px;
   width: 100%;
@@ -922,14 +922,36 @@ h1 span {
   font-size: 1rem;
 }
 
+.graph-inspector > h3,
 .graph-inspector > dl,
-.graph-inspector > .graph-inspector-relationships,
-.graph-inspector > .graph-inspector-hidden-context {
+.graph-inspector > .graph-inspector-content-grid {
   grid-column: 1 / -1;
 }
 
-.graph-inspector h4 {
-  margin: 16px 0 5px;
+.graph-inspector-content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.graph-inspector-task-details,
+.graph-inspector-dependency-details {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e0e9eb;
+  border-radius: 10px;
+  background: #fbfdfd;
+}
+
+.graph-inspector-content-grid h4 {
+  margin: 0 0 10px;
+}
+
+.graph-inspector-task-details h5 {
+  margin: 12px 0 4px;
+  color: #536b76;
+  font-size: 0.78rem;
 }
 
 .graph-inspector dl {
@@ -944,6 +966,21 @@ h1 span {
 
 .graph-inspector dd {
   margin: 0;
+}
+
+.graph-inspector-task-details p,
+.graph-inspector-dependency-details p {
+  margin: 5px 0 0;
+}
+
+.graph-inspector-hidden-context {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e9eb;
+}
+
+.graph-inspector-hidden-context h4 {
+  margin: 0 0 5px;
 }
 
 .graph-inspector p {
@@ -1615,9 +1652,9 @@ h1 span {
 }
 
 .task-dialog {
-  width: min(620px, calc(100vw - 28px));
+  width: min(940px, calc(100vw - 28px));
   max-width: none;
-  max-height: min(88vh, 860px);
+  max-height: min(90vh, 960px);
   padding: 0;
   overflow: auto;
   border: 1px solid #dce5e8;
@@ -1656,6 +1693,27 @@ h1 span {
 
 .task-form-fields {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.task-form-section {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dce5e8;
+  border-radius: 10px;
+}
+
+.task-form-section legend {
+  padding: 0 6px;
+  color: #245f67;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.task-form-section-fields {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
 }
@@ -1690,6 +1748,57 @@ h1 span {
 .task-field textarea {
   min-height: 88px;
   resize: vertical;
+}
+
+.task-dependency-picker {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.task-dependency-search {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #d6e1e4;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.task-dependency-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 3px 8px;
+  max-height: 180px;
+  padding: 7px;
+  overflow: auto;
+  border: 1px solid #e0e9eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.task-dependency-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px;
+  border-radius: 5px;
+  color: #435d69;
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.task-dependency-option input {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.task-dependency-option:hover {
+  background: #edf5f5;
 }
 
 .form-error {
@@ -1743,6 +1852,10 @@ h1 span {
     min-height: 360px;
   }
 
+  .graph-inspector-content-grid {
+    grid-template-columns: 1fr;
+  }
+
   .graph-toolbar {
     align-items: stretch;
   }
@@ -1757,7 +1870,7 @@ h1 span {
 }
 
 @media (max-width: 480px) {
-  .task-form-fields {
+  .task-form-section-fields {
     grid-template-columns: 1fr;
   }
 

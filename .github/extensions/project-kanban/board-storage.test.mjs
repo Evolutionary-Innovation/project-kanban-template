@@ -420,6 +420,7 @@ test("uses the independent project's configured IDs, statuses, and required extr
     task: {
       title: "Review a new workflow",
       area: "Research",
+      category: "Workflow Research",
       priority: "Urgent",
       status: "Open",
       details: "Run the second session.",
@@ -429,6 +430,7 @@ test("uses the independent project's configured IDs, statuses, and required extr
   });
   const createdTask = created.tasks.find(({ id }) => id === "EXP-002");
   assert.equal(createdTask.status, "Open");
+  assert.equal(createdTask.category, "Workflow Research");
   assert.equal(createdTask.createdDate, todayDateOnly());
   assert.equal(createdTask.completionDate, "");
 

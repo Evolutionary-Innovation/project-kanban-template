@@ -128,6 +128,7 @@ test("allocates configured IDs and appends configured extra fields", () => {
   const draft = validateTaskDraft("experiments", {
     title: "Test a weekly review",
     area: "Research",
+    category: "Workflow Research",
     status: "Open",
     priority: "Standard",
     details: "Compare completion rates.",
@@ -143,6 +144,24 @@ test("allocates configured IDs and appends configured extra fields", () => {
 
   assert.equal(task.id, "EXP-002");
   assert.equal(parsed.tasks.find(({ id }) => id === "EXP-002").hypothesis, "Weekly review will reduce missed items.");
+  assert.equal(parsed.tasks.find(({ id }) => id === "EXP-002").category, "Workflow Research");
+  assert.equal(validateTaskDraft("experiments", {
+    title: "Use the configured category",
+    area: "Research",
+    status: "Open",
+    priority: "Standard",
+    details: "",
+    hypothesis: "Check the configured category fallback.",
+  }, config).category, source.category);
+  assert.throws(() => validateTaskDraft("experiments", {
+    title: "Reject an empty category",
+    area: "Research",
+    category: "",
+    status: "Open",
+    priority: "Standard",
+    details: "",
+    hypothesis: "Check that invalid categories are rejected.",
+  }, config), /Category must be a non-empty string/);
 });
 
 test("edits and deletes only the selected canonical row while preserving prose", () => {

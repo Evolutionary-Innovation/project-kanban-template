@@ -85,6 +85,83 @@ ${config.schemaMarker}
   );
 });
 
+test("preserves historic br cells during schema normalization until the row is edited", async () => {
+  const { config, documents } = await loadProject();
+  const source = config.sources[0];
+  const olderMarkdown = `# Roadmap
+
+## Kanban tasks
+${config.schemaMarker}
+| ID | Title | Status | Priority | Order | Area | Category | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| RM-001 | Retain old schema rows | Planned | High | 100 | Core | Delivery | Existing<br>multiline details. |
+`;
+  const normalized = normalizeConfiguredTaskTable(olderMarkdown, source, config);
+  assert.ok(normalized.includes("Existing<br>multiline details."));
+  assert.equal(
+    parseBoardDocuments({ ...documents, [source.path]: normalized }, config)
+      .tasks.find(({ id }) => id === "RM-001").details,
+    "Existing\nmultiline details.",
+  );
+
+  const edited = updateTaskRecord(normalized, "RM-001", { title: "Edited old task" }, source, config);
+  assert.ok(edited.includes("Existing&#10;multiline details."));
+  assert.doesNotMatch(edited, /<br\s*\/?>/i);
+});
+
+test("round-trips multiline text through table-safe newline entities", () => {
+  const { config, documents } = loadProject();
+  const source = config.sources[0];
+  const details = "Description:\n1. First item\n2. Second item";
+  const acceptanceCriteria = "Criteria:\n1. First outcome\n2. Second outcome";
+  const encoded = updateTaskRecord(documents[source.path], "RM-001", {
+    details,
+    acceptanceCriteria,
+  }, source, config);
+
+  assert.ok(encoded.includes("Description:&#10;1. First item&#10;2. Second item"));
+  assert.ok(encoded.includes("Criteria:&#10;1. First outcome&#10;2. Second outcome"));
+  assert.doesNotMatch(encoded, /<br\s*\/?>/i);
+  const task = parseBoardDocuments({ ...documents, [source.path]: encoded }, config)
+    .tasks.find(({ id }) => id === "RM-001");
+  assert.equal(task.details, details);
+  assert.equal(task.acceptanceCriteria, acceptanceCriteria);
+
+  const literalMarker = "Literal &#10; marker, C:\\notes, and pipe A | B.";
+  const encodedLiteral = updateTaskRecord(encoded, "RM-001", { details: literalMarker }, source, config);
+  assert.ok(encodedLiteral.includes("Literal \\&#10; marker"));
+  assert.equal(
+    parseBoardDocuments({ ...documents, [source.path]: encodedLiteral }, config)
+      .tasks.find(({ id }) => id === "RM-001").details,
+    literalMarker,
+  );
+});
+
+test("reads historic br line breaks and normalizes them on edit", () => {
+  const { config, documents } = loadProject();
+  const source = config.sources[0];
+  const details = "Description:\n1. Historic item\n2. Retained item";
+  const acceptanceCriteria = "Criteria:\n1. Historic outcome\n2. Retained outcome";
+  const encoded = updateTaskRecord(documents[source.path], "RM-001", {
+    details,
+    acceptanceCriteria,
+  }, source, config);
+  const legacy = encoded.replaceAll("&#10;", "<br>");
+  const legacyBoard = parseBoardDocuments({ ...documents, [source.path]: legacy }, config);
+  const legacyTask = legacyBoard.tasks.find(({ id }) => id === "RM-001");
+
+  assert.equal(legacyTask.details, details);
+  assert.equal(legacyTask.acceptanceCriteria, acceptanceCriteria);
+
+  const normalized = updateTaskRecord(legacy, "RM-001", { title: "Edited historic task" }, source, config);
+  assert.doesNotMatch(normalized, /<br\s*\/?>/i);
+  assert.ok(normalized.includes("Description:&#10;1. Historic item"));
+  const normalizedTask = parseBoardDocuments({ ...documents, [source.path]: normalized }, config)
+    .tasks.find(({ id }) => id === "RM-001");
+  assert.equal(normalizedTask.details, details);
+  assert.equal(normalizedTask.acceptanceCriteria, acceptanceCriteria);
+});
+
 test("preserves historical ID aliases without a legacy-format adapter", () => {
   const rawConfig = testConfig();
   rawConfig.sources[2].legacyIdPrefixes = ["OLD"];

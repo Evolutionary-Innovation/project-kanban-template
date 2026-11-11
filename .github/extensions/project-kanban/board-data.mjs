@@ -56,8 +56,92 @@ function splitMarkdownRow(line) {
   return cells;
 }
 
-function formatMarkdownRow(cells) {
-  return `| ${cells.map((cell) => String(cell ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>")).join(" | ")} |`;
+// Keep multiline values within one table row and normalize historic HTML breaks on read.
+function markdownLineBreakAt(value, index) {
+  return value.slice(index).match(/^<br\s*\/?>/i)?.[0] ?? "";
+}
+
+function newlineLength(value, index) {
+  if (value[index] === "\r") return value[index + 1] === "\n" ? 2 : 1;
+  return value[index] === "\n" ? 1 : 0;
+}
+
+function encodeMarkdownCell(cell) {
+  const value = String(cell ?? "");
+  let encoded = "";
+  let index = 0;
+
+  while (index < value.length) {
+    let slashEnd = index;
+    while (value[slashEnd] === "\\") slashEnd += 1;
+    const slashCount = slashEnd - index;
+    const lineBreak = markdownLineBreakAt(value, slashEnd);
+    const lineEndingLength = newlineLength(value, slashEnd);
+
+    if (lineEndingLength || lineBreak) {
+      encoded += "\\".repeat(slashCount * 2);
+      encoded += "&#10;";
+      index = slashEnd + (lineEndingLength || lineBreak.length);
+    } else if (value.startsWith("&#10;", slashEnd)) {
+      encoded += "\\".repeat(slashCount * 2 + 1);
+      encoded += "&#10;";
+      index = slashEnd + 5;
+    } else if (slashCount > 0) {
+      encoded += "\\".repeat(slashCount);
+      index = slashEnd;
+    } else if (value[index] === "|") {
+      encoded += "\\|";
+      index += 1;
+    } else {
+      encoded += value[index];
+      index += 1;
+    }
+  }
+
+  return encoded;
+}
+
+function decodeMarkdownCell(value) {
+  let decoded = "";
+  let index = 0;
+
+  while (index < value.length) {
+    let slashEnd = index;
+    while (value[slashEnd] === "\\") slashEnd += 1;
+    const slashCount = slashEnd - index;
+    if (value.startsWith("&#10;", slashEnd)) {
+      decoded += "\\".repeat(Math.floor(slashCount / 2));
+      decoded += slashCount % 2 === 0 ? "\n" : "&#10;";
+      index = slashEnd + 5;
+      continue;
+    }
+
+    const lineBreak = markdownLineBreakAt(value, slashEnd);
+    if (lineBreak) {
+      decoded += "\\".repeat(slashCount);
+      decoded += "\n";
+      index = slashEnd + lineBreak.length;
+      continue;
+    }
+
+    if (slashCount > 0) {
+      decoded += "\\".repeat(slashCount);
+      index = slashEnd;
+      continue;
+    }
+
+    decoded += value[index];
+    index += 1;
+  }
+
+  return decoded;
+}
+
+function formatMarkdownRow(cells, { preserveCellEncoding = false } = {}) {
+  const formatCell = preserveCellEncoding
+    ? (cell) => String(cell ?? "").replace(/\|/g, "\\|")
+    : encodeMarkdownCell;
+  return `| ${cells.map(formatCell).join(" | ")} |`;
 }
 
 function taskIdPattern(source) {
@@ -192,7 +276,10 @@ function findSchemaTable(markdown, source, config) {
     if (cells.length !== headers.length) {
       throw new Error(`${source.path}: task row has ${cells.length} cells; expected ${headers.length}.`);
     }
-    const values = Object.fromEntries(headers.map((header, index) => [fieldName(header), cells[index]]));
+    const values = Object.fromEntries(headers.map((header, index) => [
+      fieldName(header),
+      decodeMarkdownCell(cells[index]),
+    ]));
     const task = {
       id: values.id,
       title: values.title,
@@ -326,7 +413,10 @@ export function normalizeConfiguredTaskTable(markdown, source, config) {
       throw new Error(`${source.path}: cannot normalize a malformed task row.`);
     }
     const values = new Map(originalKeys.map((key, index) => [key, cells[index]]));
-    lines[rowIndex] = formatMarkdownRow(targetHeaders.map((header) => values.get(fieldName(header)) ?? ""));
+    lines[rowIndex] = formatMarkdownRow(
+      targetHeaders.map((header) => values.get(fieldName(header)) ?? ""),
+      { preserveCellEncoding: true },
+    );
   }
   return lines.join("\n");
 }
@@ -431,7 +521,7 @@ export function updateTaskRecord(markdown, taskId, updates, source, config) {
     return splitMarkdownRow(line)[idIndex] === taskId;
   });
   if (rowIndex === -1) throw new Error(`Task "${taskId}" was not found in ${source.path}.`);
-  const cells = splitMarkdownRow(lines[rowIndex]);
+  const cells = splitMarkdownRow(lines[rowIndex]).map(decodeMarkdownCell);
   for (const [field, value] of entries) {
     const index = headerIndex(headers, field);
     if (index === -1) throw new Error(`${source.path}: the task table has no ${field} column.`);

@@ -363,25 +363,28 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     const contentGrid = document.createElement("div");
     contentGrid.className = "graph-inspector-content-grid";
 
-    const taskDetails = document.createElement("section");
-    taskDetails.className = "graph-inspector-task-details";
-    const taskDetailsHeading = document.createElement("h4");
-    taskDetailsHeading.textContent = "Task details";
-    taskDetails.append(taskDetailsHeading);
-    if (node.details.length) {
-      for (const { label, value } of node.details) {
-        const detailSection = document.createElement("section");
-        const title = document.createElement("h5");
-        const content = document.createElement("p");
-        title.textContent = label;
-        content.textContent = value;
-        detailSection.append(title, content);
-        taskDetails.append(detailSection);
-      }
-    } else {
-      const emptyDetails = document.createElement("p");
-      emptyDetails.textContent = "No additional task details.";
-      taskDetails.append(emptyDetails);
+    const populatedDetails = node.details.filter(
+      ({ value }) => typeof value === "string" && value.trim(),
+    );
+    for (const { label, value } of populatedDetails) {
+      const detailCard = document.createElement("section");
+      detailCard.className = "graph-inspector-detail-card";
+      const title = document.createElement("h4");
+      const content = document.createElement("p");
+      title.textContent = label;
+      content.textContent = value;
+      detailCard.append(title, content);
+      contentGrid.append(detailCard);
+    }
+    if (!populatedDetails.length) {
+      const emptyDetails = document.createElement("section");
+      emptyDetails.className = "graph-inspector-detail-card";
+      const title = document.createElement("h4");
+      const content = document.createElement("p");
+      title.textContent = "Task details";
+      content.textContent = "No additional task details.";
+      emptyDetails.append(title, content);
+      contentGrid.append(emptyDetails);
     }
 
     const dependencyDetails = document.createElement("section");
@@ -438,7 +441,7 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       dependencyDetails.append(pathNote);
     }
 
-    contentGrid.append(taskDetails, dependencyDetails);
+    contentGrid.append(dependencyDetails);
     inspector.append(contentGrid);
   }
 

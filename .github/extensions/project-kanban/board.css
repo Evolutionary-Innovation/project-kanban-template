@@ -969,7 +969,7 @@ h1 span {
   gap: 16px;
 }
 
-.graph-inspector-task-details,
+.graph-inspector-detail-card,
 .graph-inspector-dependency-details {
   min-width: 0;
   padding: 14px;
@@ -980,12 +980,6 @@ h1 span {
 
 .graph-inspector-content-grid h4 {
   margin: 0 0 10px;
-}
-
-.graph-inspector-task-details h5 {
-  margin: 12px 0 4px;
-  color: #536b76;
-  font-size: 0.78rem;
 }
 
 .graph-inspector dl {
@@ -1002,7 +996,7 @@ h1 span {
   margin: 0;
 }
 
-.graph-inspector-task-details p,
+.graph-inspector-detail-card p,
 .graph-inspector-dependency-details p {
   margin: 5px 0 0;
 }
@@ -1922,6 +1916,10 @@ h1 span {
     flex-direction: column;
   }
 
+  .graph-inspector-content-grid {
+    grid-template-columns: 1fr;
+  }
+
   .graph-viewport {
     height: min(72vh, 760px);
     min-height: 420px;
@@ -1951,10 +1949,6 @@ h1 span {
   .graph-viewport {
     height: min(70vh, 640px);
     min-height: 360px;
-  }
-
-  .graph-inspector-content-grid {
-    grid-template-columns: 1fr;
   }
 
   .graph-toolbar {

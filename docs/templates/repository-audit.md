@@ -14,5 +14,5 @@ Extract distinct, actionable work into the canonical task table. Link to an exis
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->
-| ID | Title | Status | Priority | Order | Area | Category | Details | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ID | Title | Status | Priority | Order | Area | Category | Details | Acceptance Criteria | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

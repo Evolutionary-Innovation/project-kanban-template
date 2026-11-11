@@ -10,8 +10,7 @@ const fixtureRoot = fileURLToPath(new URL("../../../../examples/synthetic-browse
 test("parses the isolated synthetic browser fixture and its UX data distributions", async () => {
   const config = await readBoardConfig(fixtureRoot);
   assert.ok(config.sources.every((source) =>
-    source.extraFields.some(({ key, label, type, required }) =>
-      key === "acceptanceCriteria" && label === "Acceptance Criteria" && type === "textarea" && !required)));
+    source.extraFields.every(({ key }) => key !== "acceptanceCriteria")));
   const documents = Object.fromEntries(
     await Promise.all(
       config.sources.map(async (source) => [source.path, await readFile(`${fixtureRoot}/${source.path}`, "utf8")]),
@@ -23,6 +22,7 @@ test("parses the isolated synthetic browser fixture and its UX data distribution
       .map((value) => [value, board.tasks.filter((task) => task[field] === value).length]));
 
   assert.equal(board.tasks.length, 60);
+  assert.ok(board.tasks.every(({ acceptanceCriteria }) => typeof acceptanceCriteria === "string"));
   assert.equal(board.config.completionStatus, "Complete");
   assert.deepEqual(counts("status"), {
     Complete: 10,

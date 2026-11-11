@@ -161,6 +161,7 @@ function validateEditRequest(input, config) {
     "area",
     "category",
     "details",
+    "acceptanceCriteria",
     ...config.sources.flatMap((source) => source.extraFields.map(({ key }) => key)),
   ]);
   const fields = Object.keys(input.updates);
@@ -189,6 +190,9 @@ function validateEditRequest(input, config) {
     const fieldConfig = config.sources
       .flatMap(({ extraFields }) => extraFields)
       .find(({ key }) => key === field);
+    if (field === "acceptanceCriteria" && value.length > 5000) {
+      throw new BoardStorageError("board_input_invalid", "Acceptance Criteria exceeds 5000 characters.");
+    }
     if (
       fieldConfig &&
       ((fieldConfig.required && value.trim() === "") ||
@@ -467,6 +471,7 @@ export async function editTaskInDocuments(workspaceRoot, config, input) {
       "area",
       "category",
       "details",
+      "acceptanceCriteria",
       ...source.extraFields.map(({ key }) => key),
     ]);
     if (Object.keys(input.updates).some((field) => !sourceFields.has(field))) {

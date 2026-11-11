@@ -33,7 +33,7 @@ Version numbers describe different contracts and must not be conflated:
 | Configuration | Shape accepted by `project-kanban.config.json` | `configVersion: 1` |
 | Consumer compatibility | Schema/config versions and host/capabilities explicitly supported by a release | Declared in each release's notes |
 
-Schema and configuration versions evolve independently of the extension release. A backward-compatible optional configuration addition may keep `configVersion` unchanged. An incompatible task-table or configuration change requires an explicit version change and migration guidance; a runtime release must state which schema/config versions it accepts. Consumers must not infer compatibility from a matching extension directory or a successful parse alone.
+Schema and configuration versions evolve independently of the extension release. A backward-compatible optional configuration addition may keep `configVersion` unchanged. Schema v1 includes optional first-class Acceptance Criteria; older v1 tables without that column remain readable and gain it on their next normalizing write. An incompatible task-table or configuration change requires an explicit version change and migration guidance; a runtime release must state which schema/config versions it accepts. Consumers must not infer compatibility from a matching extension directory or a successful parse alone.
 
 The root README intentionally has no fixed release number. Git tags are immutable source pins; a published GitHub Release attached to a tag is the canonical release record and carries the release notes. Do not move or reuse an existing tag. A tag without a corresponding GitHub Release is tag-only, not a published release.
 

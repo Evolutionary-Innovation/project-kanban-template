@@ -28,7 +28,6 @@
       "categoryTone": "blue",
       "extraFields": [
         { "key": "evidence", "label": "Evidence", "type": "textarea" },
-        { "key": "acceptanceCriteria", "label": "Acceptance Criteria", "type": "textarea" },
         { "key": "limitation", "label": "Limitation", "type": "textarea" },
         { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },
@@ -54,7 +53,6 @@
       "categoryTone": "purple",
       "extraFields": [
         { "key": "evidence", "label": "Evidence", "type": "textarea" },
-        { "key": "acceptanceCriteria", "label": "Acceptance Criteria", "type": "textarea" },
         { "key": "limitation", "label": "Limitation", "type": "textarea" },
         { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },
@@ -80,7 +78,6 @@
       "categoryTone": "green",
       "extraFields": [
         { "key": "evidence", "label": "Evidence", "type": "textarea" },
-        { "key": "acceptanceCriteria", "label": "Acceptance Criteria", "type": "textarea" },
         { "key": "limitation", "label": "Limitation", "type": "textarea" },
         { "key": "recommendedFix", "label": "Recommended Fix", "type": "textarea" },
         { "key": "rationale", "label": "Rationale", "type": "textarea" },

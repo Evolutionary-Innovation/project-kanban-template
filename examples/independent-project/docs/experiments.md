@@ -4,6 +4,6 @@ Use the Hypothesis field to make an experiment falsifiable. Keep observations an
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->
-| ID | Title | Status | Priority | Order | Area | Category | Details | Hypothesis | Depends On | Execution Type | Created Date | Completion Date |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| EXP-001 | Compare two note-taking workflows | Open | Standard | 100 | Research | Experiment | Track completion and review effort for each workflow. | A short daily review will reduce missed follow-ups. | PLAN-001 |  |  |  |
+| ID | Title | Status | Priority | Order | Area | Category | Details | Acceptance Criteria | Hypothesis | Depends On | Execution Type | Created Date | Completion Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| EXP-001 | Compare two note-taking workflows | Open | Standard | 100 | Research | Experiment | Track completion and review effort for each workflow. |  | A short daily review will reduce missed follow-ups. | PLAN-001 |  |  |  |

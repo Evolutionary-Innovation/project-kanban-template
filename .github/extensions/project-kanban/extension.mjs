@@ -89,6 +89,7 @@ const taskDraftSchema = {
     priority: { type: "string", maxLength: 60 },
     status: { type: "string", maxLength: 60 },
     details: { type: "string", maxLength: 5000 },
+    acceptanceCriteria: { type: "string", maxLength: 5000 },
   },
 };
 const editableProperties = {
@@ -98,6 +99,7 @@ const editableProperties = {
   area: { type: "string", minLength: 1, maxLength: 100 },
   category: { type: "string", minLength: 1, maxLength: 100 },
   details: { type: "string", maxLength: 5000 },
+  acceptanceCriteria: { type: "string", maxLength: 5000 },
 };
 
 function getInstanceKey(context) {

@@ -20,9 +20,17 @@ const board = parseBoardDocuments(testDocuments(rawConfig), config);
 
 test("searches configured text fields and combines search with multi-select filters", () => {
   const tasks = board.tasks.map((task) => task.id === "TD-01"
-    ? { ...task, limitation: "Distinctive contract limitation." }
+    ? {
+      ...task,
+      limitation: "Distinctive contract limitation.",
+      acceptanceCriteria: "Distinctive measurable acceptance result.",
+    }
     : task);
   assert.deepEqual(filterTasks(tasks, config, { search: "distinctive contract" }).map(({ id }) => id), ["TD-01"]);
+  assert.deepEqual(
+    filterTasks(tasks, config, { search: "measurable acceptance" }).map(({ id }) => id),
+    ["TD-01"],
+  );
 
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const candidates = [
@@ -65,6 +73,7 @@ test("sorts a view without mutating canonical order and retains lifecycle labels
     status: "Planned",
     createdDate: "2026-01-01",
     details: "A detail section.",
+    acceptanceCriteria: "A measurable result.",
     rationale: "A rationale section.",
   }, config, true);
   assert.equal(collapsed.detailsHidden, true);
@@ -73,6 +82,11 @@ test("sorts a view without mutating canonical order and retains lifecycle labels
     { label: "Last completed", value: "2026-01-03" },
   ]);
   assert.ok(collapsed.detailSections.length > 0);
+  assert.deepEqual(collapsed.detailSections.map(({ label }) => label), [
+    "Details",
+    "Acceptance Criteria",
+    "Rationale",
+  ]);
 });
 
 test("serializes configured planning filters and renders task titles and confidence consistently", () => {

@@ -18,6 +18,6 @@ Actionable follow-ups belong in the table. If another source already owns the wo
 
 ## Kanban tasks
 <!-- project-kanban-schema:1 -->
-| ID | Title | Status | Priority | Order | Area | Category | Details | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ID | Title | Status | Priority | Order | Area | Category | Details | Acceptance Criteria | Evidence | Limitation | Recommended Fix | Rationale | Recommendations | Depends On | Execution Type | Created Date | Completion Date |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 <!-- project-kanban-id-sequence:RA:2 -->

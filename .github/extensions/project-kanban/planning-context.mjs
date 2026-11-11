@@ -43,6 +43,7 @@ const ROUTE_RELATIONSHIPS = new Set([
 ]);
 const TASK_TEXT_FIELDS = [
   "details",
+  "acceptanceCriteria",
   "evidence",
   "limitation",
   "recommendedFix",

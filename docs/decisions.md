@@ -157,9 +157,18 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 
 ## ADR-18: Keep task-entry improvements configuration-driven
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-19
 - **Observations:** Area and Category are task fields that users may need to vary per task, while source configuration supplies useful defaults and suggestions. Configured extra fields already support project-specific text such as Acceptance Criteria, and task-ID fields already define the canonical dependency representation.
 - **Assumptions:** Existing clients may omit Category when creating tasks and must continue to receive the source-configured value. Suggestions should aid entry without restricting new values or replacing validation.
 - **Alternatives considered:** Keep Category fixed to the source on creation, add Acceptance Criteria to every task schema, or introduce a new schema version and persistence model for the form.
-- **Decision:** Use the same configuration-driven form for create and edit. Accept an optional Category in create drafts and fall back to the configured source Category when omitted; keep Acceptance Criteria as an optional configured textarea; keep dependency selection as an assistive picker over the existing task-ID field and comma-separated value.
-- **Consequences:** The schema-v1 task model and Markdown table format remain unchanged. Existing clients remain compatible, and all writes continue through the existing validation, revision, lock, and atomic replacement path.
+- **Decision:** Use the same configuration-driven form for create and edit. Accept an optional Category in create drafts and fall back to the configured source Category when omitted; at the time, keep Acceptance Criteria as an optional configured textarea; keep dependency selection as an assistive picker over the existing task-ID field and comma-separated value.
+- **Consequences:** The form preserved the schema-v1 task model at that time. ADR-19 supersedes the Acceptance Criteria choice while preserving the other form decisions.
+
+## ADR-19: Make Acceptance Criteria an optional first-class task field
+
+- **Status:** Accepted
+- **Observations:** Acceptance Criteria is useful across unrelated projects as task completion guidance, but making it a required value would burden tasks for which explicit criteria do not apply. Keeping it source-configured duplicates a common capability in every project configuration and makes the data contract inconsistent across sources.
+- **Assumptions:** Existing schema-v1 consumers must continue to load tables that predate this field. Missing criteria are unknown/not supplied, not a basis for inferring project requirements.
+- **Alternatives considered:** Keep Acceptance Criteria as a configured extra field; require a new task-table schema version and migrate all consumers before use; or make the field globally required.
+- **Decision:** Add `acceptanceCriteria` as an optional core task string with a dedicated Markdown column. Parse a missing column/value as an empty string, validate supplied values up to 5,000 characters, and add the column when an older source is normalized for a write. Keep the schema marker and configuration version at v1.
+- **Consequences:** Existing task tables and create callers remain valid, with blank criteria until explicitly supplied. New and normalized tables share a consistent column, all edits continue through the locked/revision-checked atomic write, and no completion criteria are fabricated for historical tasks.

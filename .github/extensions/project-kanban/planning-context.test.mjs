@@ -33,6 +33,7 @@ const board = {
       area: "Analytics",
       source: { document: "docs/roadmap.md" },
       details: "Create reliable investor analytics.",
+      acceptanceCriteria: "The result is reproducible with documented evidence.",
       dependencyView: {
         dependsOn: ["TD-001"],
         blockedBy: [],
@@ -265,6 +266,10 @@ test("builds read-only planning context with explicit goals, canonical edges, an
   assert.deepEqual(context.board.inProgressTaskIds, ["RM-003"]);
   assert.equal(context.board.tasks.length, 5);
   assert.equal(context.board.tasks.find(({ id }) => id === "RM-004").readiness, "complete");
+  assert.equal(
+    context.board.tasks.find(({ id }) => id === "RM-001").acceptanceCriteria,
+    "The result is reproducible with documented evidence.",
+  );
   assert.deepEqual(context.board.canonicalDependencies, [{ prerequisiteId: "TD-001", dependentId: "RM-001" }]);
   assert.equal(context.board.unapprovedSuggestionsIncluded, false);
   assert.deepEqual(context.currentView, {

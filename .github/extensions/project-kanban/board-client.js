@@ -751,6 +751,7 @@ function renderColumns(columns) {
           typeof task.id !== "string" ||
           typeof task.title !== "string" ||
           typeof task.details !== "string" ||
+          typeof task.acceptanceCriteria !== "string" ||
           typeof task.category !== "string" ||
           typeof task.priority !== "string" ||
           typeof task.area !== "string" ||
@@ -1045,6 +1046,9 @@ function openTaskDialog(mode, taskType, task = null) {
       required: true, maxLength: 100, suggestions: categories,
     }],
     ["details", "Details", task?.details ?? "", {
+      multiline: true, maxLength: 5000, fullWidth: true,
+    }],
+    ["acceptanceCriteria", "Acceptance Criteria", task?.acceptanceCriteria ?? "", {
       multiline: true, maxLength: 5000, fullWidth: true,
     }],
   ];

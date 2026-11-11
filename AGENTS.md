@@ -21,6 +21,7 @@ Before significant changes, review relevant documents. After changes, update aff
 - Preserve narrative content when creating or updating task tables.
 - Use the exact configured schema marker and standard task columns.
 - Status values and priority names must come from `project-kanban.config.json`.
+- Acceptance Criteria is an optional first-class task field. Write concise, observable outcomes when useful; leave it blank rather than inventing criteria for historical or unsuitable tasks.
 - Do not add a source-specific parser to the generic core. Legacy Markdown inference must be an explicit, reviewed adapter.
 - Preserve stable task IDs, per-status order, and source ownership.
 

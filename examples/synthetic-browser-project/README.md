@@ -27,6 +27,5 @@ Completed tasks depend only on completed prerequisites; `RM-017` is dependency
 ready while still incomplete. `RM-001`/`RM-002` form a pre-existing cycle, and
 `RM-019` references the unresolved `TD-999`.
 
-The fixture configures optional Acceptance Criteria text areas on each source so
-the shared create/edit form can be exercised without changing the Template's
-default source configuration.
+The fixture uses the shared optional Acceptance Criteria field to exercise task
+entry and rendering without source-specific configuration.

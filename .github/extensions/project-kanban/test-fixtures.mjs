@@ -122,6 +122,7 @@ function markdownFor(config, sourceConfig, rows) {
     ["area", "Area"],
     ["category", "Category"],
     ["details", "Details"],
+    ["acceptanceCriteria", "Acceptance Criteria"],
     ...sourceConfig.extraFields.map(({ key, label }) => [key, label]),
   ];
   const line = (values) => `| ${values.map((value) => String(value ?? "").replaceAll("|", "\\|")).join(" | ")} |`;

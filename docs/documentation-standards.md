@@ -32,6 +32,7 @@ The canvas reads documents configured in `project-kanban.config.json`. Each conf
 | Area | Workstream or domain |
 | Category | Human-readable source/work type badge |
 | Details | Supporting context, not a replacement for audit evidence |
+| Acceptance Criteria | Optional, first-class, verifiable outcomes that define what successful completion means |
 | Evidence | Optional source evidence for the task |
 | Limitation | Optional description of a constraint or defect |
 | Recommended Fix | Optional proposed remediation |
@@ -42,7 +43,9 @@ The canvas reads documents configured in `project-kanban.config.json`. Each conf
 | Created Date | Optional, unknown for historical rows unless verified |
 | Completion Date | Optional date of the most recent completion |
 
-The default template config uses the same columns across Roadmap, Technical Debt, and Research/Audit. Fields after Category are optional; projects may configure only the fields they use, but each source in one project should share its configured field contract. `Blocked By` is derived from `Depends On` and is not stored as a separate column. Keep field keys and labels aligned with config.
+The default template config uses the same columns across Roadmap, Technical Debt, and Research/Audit. Acceptance Criteria is a shared optional core field, not a configured extra field. For backwards compatibility, schema-v1 tables may omit its column; those tasks load with an empty value and the column is added when that source is next written. Other project-specific fields may be configured per source. `Blocked By` is derived from `Depends On` and is not stored as a separate column. Keep configured field keys and labels aligned with config.
+
+Write Acceptance Criteria as observable outcomes that can be checked to determine whether the task is done. Keep criteria concise and specific; do not restate the task title or duplicate implementation notes from Details. Leave the field blank when explicit acceptance conditions are not useful or cannot yet be defined. Do not invent criteria when importing historical tasks.
 
 Store the title text as it should read on the card; do not prepend a category or source label or append a duplicate task ID. The board formats a single `ID: Title` heading and removes configured prefixes and duplicate IDs for display only, without rewriting the task record.
 

@@ -16,7 +16,9 @@ export const TASK_COLUMNS = Object.freeze([
   "Area",
   "Category",
   "Details",
+  "Acceptance Criteria",
 ]);
+const REQUIRED_TASK_COLUMNS = Object.freeze(TASK_COLUMNS.filter((column) => column !== "Acceptance Criteria"));
 
 function requireText(value, label) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -133,6 +135,9 @@ function validateTask(task, source, config) {
   if (typeof task.details !== "string") {
     throw new Error(`${source.path}: ${task.id} has invalid Details.`);
   }
+  if (typeof task.acceptanceCriteria !== "string" || task.acceptanceCriteria.length > 5000) {
+    throw new Error(`${source.path}: ${task.id} has invalid Acceptance Criteria.`);
+  }
   for (const field of source.extraFields) {
     const value = task[field.key] ?? "";
     if (
@@ -167,7 +172,7 @@ function findSchemaTable(markdown, source, config) {
   const headers = splitMarkdownRow(tableLines[0]);
   const normalizedHeaders = headers.map((header) => fieldName(header));
   const requiredFields = [
-    ...TASK_COLUMNS.map(fieldName),
+    ...REQUIRED_TASK_COLUMNS.map(fieldName),
     ...source.extraFields.filter(({ required }) => required).map(({ key }) => key),
   ];
   for (const field of requiredFields) {
@@ -197,6 +202,7 @@ function findSchemaTable(markdown, source, config) {
       area: values.area,
       category: values.category,
       details: values.details,
+      acceptanceCriteria: values.acceptanceCriteria ?? "",
       source: { document: source.path, section: "Kanban tasks", schemaVersion: TASK_SCHEMA_VERSION },
     };
     for (const field of source.extraFields) task[field.key] = values[field.key] ?? "";
@@ -374,6 +380,7 @@ function allFieldKeys(source) {
     "area",
     "category",
     "details",
+    "acceptanceCriteria",
     ...source.extraFields.map(({ key }) => key),
   ]);
 }
@@ -444,7 +451,10 @@ export function validateTaskDraft(sourceKey, draft, config) {
     throw new TypeError("Task fields must be an object.");
   }
 
-  const fields = ["title", "area", "category", "priority", "status", "details", ...source.extraFields.map(({ key }) => key)];
+  const fields = [
+    "title", "area", "category", "priority", "status", "details", "acceptanceCriteria",
+    ...source.extraFields.map(({ key }) => key),
+  ];
   const requiredFields = [
     "title",
     "area",
@@ -471,9 +481,10 @@ export function validateTaskDraft(sourceKey, draft, config) {
   }
   if (!config.statuses.includes(draft.status)) throw new TypeError("Status is not supported.");
   const normalizedDraft = { ...draft };
-  for (const field of ["details", ...source.extraFields.map(({ key }) => key)]) {
+  for (const field of ["details", "acceptanceCriteria", ...source.extraFields.map(({ key }) => key)]) {
     const fieldConfig = source.extraFields.find(({ key }) => key === field);
     const value = draft[field] ?? "";
+    const label = fieldConfig?.label ?? (field === "acceptanceCriteria" ? "Acceptance Criteria" : "Details");
     if (
       typeof value !== "string" ||
       value.length > (fieldConfig?.maxLength ?? 5000) ||
@@ -481,7 +492,7 @@ export function validateTaskDraft(sourceKey, draft, config) {
       (fieldConfig?.type === "date" && value !== "" && !isValidDateOnly(value)) ||
       (fieldConfig?.choices && value !== "" && !fieldConfig.choices.includes(value))
     ) {
-      throw new TypeError(`${fieldConfig?.label ?? "Details"} is empty or exceeds its maximum length.`);
+      throw new TypeError(`${label} is empty or exceeds its maximum length.`);
     }
     normalizedDraft[field] = fieldConfig?.type === "task-ids"
       ? normalizeDependencyIds(value, config)

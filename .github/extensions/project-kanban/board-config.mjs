@@ -13,6 +13,7 @@ const RESERVED_FIELDS = new Set([
   "area",
   "category",
   "details",
+  "acceptanceCriteria",
 ]);
 
 function isRecord(value) {

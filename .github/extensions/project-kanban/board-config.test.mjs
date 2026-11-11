@@ -17,6 +17,14 @@ test("rejects unsafe paths, duplicate sources, and invalid field definitions", a
   const invalidField = structuredClone(raw);
   invalidField.sources[1].extraFields[0].key = "status";
   assert.throws(() => validateBoardConfig(invalidField, "/workspace"), /invalid or duplicated/);
+
+  const duplicateCoreField = structuredClone(raw);
+  duplicateCoreField.sources[1].extraFields.push({
+    key: "acceptanceCriteria",
+    label: "Acceptance Criteria",
+    type: "textarea",
+  });
+  assert.throws(() => validateBoardConfig(duplicateCoreField, "/workspace"), /invalid or duplicated/);
 });
 
 test("rejects unsupported config keys and status defaults", async () => {

@@ -71,9 +71,11 @@ ${config.schemaMarker}
   const parsed = parseBoardDocuments({ ...documents, [source.path]: olderMarkdown }, config);
   const task = parsed.tasks.find(({ id }) => id === "RM-001");
 
+  assert.equal(task.acceptanceCriteria, "");
   assert.equal(task.dependsOn, "");
   assert.equal(task.executionType, "");
   const normalized = normalizeConfiguredTaskTable(olderMarkdown, source, config);
+  assert.match(normalized, /\| Acceptance Criteria \|/);
   assert.match(normalized, /\| Depends On \|/);
   assert.match(normalized, /\| Execution Type \|/);
   assert.doesNotMatch(normalized, /\| Blocked By \|/);
@@ -132,6 +134,7 @@ test("allocates configured IDs and appends configured extra fields", () => {
     status: "Open",
     priority: "Standard",
     details: "Compare completion rates.",
+    acceptanceCriteria: "A successful test has measurable results.",
     hypothesis: "Weekly review will reduce missed items.",
   }, config);
   const task = {
@@ -145,12 +148,15 @@ test("allocates configured IDs and appends configured extra fields", () => {
   assert.equal(task.id, "EXP-002");
   assert.equal(parsed.tasks.find(({ id }) => id === "EXP-002").hypothesis, "Weekly review will reduce missed items.");
   assert.equal(parsed.tasks.find(({ id }) => id === "EXP-002").category, "Workflow Research");
+  assert.equal(parsed.tasks.find(({ id }) => id === "EXP-002").acceptanceCriteria, "A successful test has measurable results.");
+  assert.match(updated, /A successful test has measurable results\./);
   assert.equal(validateTaskDraft("experiments", {
     title: "Use the configured category",
     area: "Research",
     status: "Open",
     priority: "Standard",
     details: "",
+    acceptanceCriteria: "",
     hypothesis: "Check the configured category fallback.",
   }, config).category, source.category);
   assert.throws(() => validateTaskDraft("experiments", {
@@ -160,8 +166,18 @@ test("allocates configured IDs and appends configured extra fields", () => {
     status: "Open",
     priority: "Standard",
     details: "",
+    acceptanceCriteria: "",
     hypothesis: "Check that invalid categories are rejected.",
   }, config), /Category must be a non-empty string/);
+  assert.throws(() => validateTaskDraft("experiments", {
+    title: "Reject oversized criteria",
+    area: "Research",
+    status: "Open",
+    priority: "Standard",
+    details: "",
+    acceptanceCriteria: "x".repeat(5001),
+    hypothesis: "Verify field limits.",
+  }, config), /Acceptance Criteria is empty or exceeds its maximum length/);
 });
 
 test("edits and deletes only the selected canonical row while preserving prose", () => {
@@ -170,13 +186,19 @@ test("edits and deletes only the selected canonical row while preserving prose",
   const edited = updateTaskRecord(
     documents[source.path],
     "EXP-001",
-    { status: "Done", details: "Verified | repeatable", hypothesis: "Updated hypothesis." },
+    {
+      status: "Done",
+      details: "Verified | repeatable",
+      acceptanceCriteria: "Observed | repeatable result.",
+      hypothesis: "Updated hypothesis.",
+    },
     source,
     config,
   );
   assert.match(edited, /## Kanban tasks/);
   assert.match(edited, /Verified \\| repeatable/);
   assert.match(edited, /Updated hypothesis/);
+  assert.match(edited, /Observed \\| repeatable result\./);
 
   const deleted = deleteTaskRecord(edited, "EXP-001", source, config);
   assert.match(deleted, /Use the Hypothesis field/);

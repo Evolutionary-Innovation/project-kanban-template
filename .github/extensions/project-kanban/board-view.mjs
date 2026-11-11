@@ -38,6 +38,7 @@ export function matchesTaskView(task, config, criteria) {
     task.id,
     task.title,
     task.details,
+    task.acceptanceCriteria,
     ...(source?.extraFields ?? []).map(({ key }) => task[key]),
     ...(dependencies?.dependsOn ?? []),
     ...(dependencies?.blockedBy ?? []),
@@ -149,6 +150,9 @@ export function getCardPresentation(task, config, detailsCollapsed = false) {
   const source = sourceForTask(task, config);
   const detailSections = [];
   if (task.details.trim()) detailSections.push({ label: "Details", value: task.details });
+  if ((task.acceptanceCriteria ?? "").trim()) {
+    detailSections.push({ label: "Acceptance Criteria", value: task.acceptanceCriteria });
+  }
   for (const field of source?.extraFields ?? []) {
     if (["createdDate", "completionDate", "dependsOn", "executionType"].includes(field.key)) continue;
     const value = task[field.key];

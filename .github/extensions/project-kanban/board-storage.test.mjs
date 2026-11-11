@@ -66,11 +66,13 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
       priority: "High",
       status: "Planned",
       details: "Created through the generic storage API.",
+      acceptanceCriteria: "The result is reproducible.",
     },
     revisions: board.revisions,
   });
   const generatedRoadmapTask = createdRoadmap.tasks.find(({ title }) => title === "Test a generated starter");
   assert.match(generatedRoadmapTask.id, /^RM-\d{3}$/);
+  assert.equal(generatedRoadmapTask.acceptanceCriteria, "The result is reproducible.");
 
   board = createdRoadmap;
   const createdDebt = await createTaskInDocuments(root, config, {
@@ -111,10 +113,16 @@ test("persists Roadmap, Technical Debt, and Audit mutations to their configured 
 
   const edited = await editTaskInDocuments(root, config, {
     taskId: "TD-02",
-    updates: { status: "Complete", limitation: "Resolved.", rationale: "Config is now narrow." },
+    updates: {
+      status: "Complete",
+      limitation: "Resolved.",
+      rationale: "Config is now narrow.",
+      acceptanceCriteria: "Criteria are first-class and optional.",
+    },
     revisions: createdAudit.revisions,
   });
   assert.equal(edited.tasks.find(({ id }) => id === "TD-02").status, "Complete");
+  assert.equal(edited.tasks.find(({ id }) => id === "TD-02").acceptanceCriteria, "Criteria are first-class and optional.");
 
   const deleted = await deleteTaskInDocuments(root, config, {
     taskId: "RA-002",

@@ -942,8 +942,8 @@ h1 span {
 
 .graph-inspector-essentials .graph-inspector-metadata {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 10px;
   margin: 0;
 }
 
@@ -952,14 +952,14 @@ h1 span {
   align-content: start;
   gap: 2px;
   min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e0e9eb;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .graph-inspector-metadata-item dd {
   overflow-wrap: anywhere;
-}
-
-.graph-inspector-metadata-item.is-lifecycle-date {
-  grid-column: 1 / -1;
 }
 
 .graph-inspector-content-grid {
@@ -1954,10 +1954,6 @@ h1 span {
   }
 
   .graph-inspector-content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .graph-inspector-essentials .graph-inspector-metadata {
     grid-template-columns: 1fr;
   }
 

@@ -1038,12 +1038,14 @@ function openTaskDialog(mode, taskType, task = null) {
     ...boardSnapshot.tasks.map(({ category }) => category).filter(Boolean),
   ])].sort((a, b) => a.localeCompare(b));
   const taskFields = [
-    ["title", "Title", task?.title ?? "", { required: true, maxLength: 200 }],
-    ["area", "Area", task?.area ?? "", {
-      required: true, maxLength: 100, suggestions: areas,
+    ["title", "Title", task?.title ?? "", {
+      required: true, maxLength: 200, fullWidth: true,
     }],
     ["category", "Category", task?.category ?? source.category, {
       required: true, maxLength: 100, suggestions: categories,
+    }],
+    ["area", "Area", task?.area ?? "", {
+      required: true, maxLength: 100, suggestions: areas,
     }],
     ["details", "Details", task?.details ?? "", {
       multiline: true, maxLength: 5000, fullWidth: true,

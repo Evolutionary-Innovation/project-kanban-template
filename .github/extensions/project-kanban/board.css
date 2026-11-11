@@ -928,6 +928,40 @@ h1 span {
   grid-column: 1 / -1;
 }
 
+.graph-inspector-essentials {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e0e9eb;
+  border-radius: 10px;
+  background: #fbfdfd;
+}
+
+.graph-inspector-essentials h4 {
+  margin: 0 0 10px;
+}
+
+.graph-inspector-essentials .graph-inspector-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.graph-inspector-metadata-item {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.graph-inspector-metadata-item dd {
+  overflow-wrap: anywhere;
+}
+
+.graph-inspector-metadata-item.is-lifecycle-date {
+  grid-column: 1 / -1;
+}
+
 .graph-inspector-content-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1920,6 +1954,10 @@ h1 span {
   }
 
   .graph-inspector-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-inspector-essentials .graph-inspector-metadata {
     grid-template-columns: 1fr;
   }
 

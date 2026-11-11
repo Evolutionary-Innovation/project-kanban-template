@@ -316,6 +316,14 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     const downstreamIds = node.unresolved
       ? []
       : getDownstreamTaskIds(latestSnapshot.dependencyGraph, node.id);
+    const essentials = document.createElement("section");
+    essentials.className = "graph-inspector-essentials";
+    const essentialsHeading = document.createElement("h4");
+    essentialsHeading.id = "graph-inspector-essentials-heading";
+    essentialsHeading.textContent = "Task Essentials";
+    essentials.setAttribute("aria-labelledby", essentialsHeading.id);
+    essentials.append(essentialsHeading);
+
     const metadata = document.createElement("dl");
     metadata.className = "graph-inspector-metadata";
     const workflowLabels = {
@@ -337,13 +345,20 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
       ...node.dates.map(({ label, value }) => [label, value]),
     ]) {
       if (!value) continue;
+      const item = document.createElement("div");
+      item.className = "graph-inspector-metadata-item";
+      if (["Added", "Completed", "Last completed"].includes(label)) {
+        item.classList.add("is-lifecycle-date");
+      }
       const term = document.createElement("dt");
       const detail = document.createElement("dd");
       term.textContent = label;
       detail.textContent = value;
-      metadata.append(term, detail);
+      item.append(term, detail);
+      metadata.append(item);
     }
-    inspector.append(metadata);
+    essentials.append(metadata);
+    inspector.append(essentials);
 
     const contentGrid = document.createElement("div");
     contentGrid.className = "graph-inspector-content-grid";

@@ -1068,6 +1068,8 @@ function openTaskDialog(mode, taskType, task = null) {
   const dependencyFields = [];
   const additionalFields = [];
   for (const field of source.extraFields) {
+    if (field.key === "executionType") continue;
+
     let value = task?.[field.key] ?? "";
     if (mode === "create" && field.key === "createdDate" && field.type === "date" && !value) {
       value = localDateOnly();
@@ -1086,7 +1088,7 @@ function openTaskDialog(mode, taskType, task = null) {
     };
     const descriptor = [field.key, field.label, value, options];
     if (field.type === "task-ids") dependencyFields.push(descriptor);
-    else if (["createdDate", "completionDate", "executionType"].includes(field.key)) workflowFields.push(descriptor);
+    else if (["createdDate", "completionDate"].includes(field.key)) workflowFields.push(descriptor);
     else additionalFields.push(descriptor);
   }
 

@@ -423,12 +423,14 @@ test("uses the independent project's configured IDs, statuses, and required extr
   const { root, config } = await createWorkspace(t, independentTestConfig());
   const board = await readBoardSnapshot(root, config);
   assert.equal(board.tasks.find(({ id }) => id === "EXP-001").createdDate, "");
+  assert.equal(board.tasks.some(({ area }) => area === "New Task Area"), false);
+  assert.equal(board.tasks.some(({ category }) => category === "New Task Category"), false);
   const created = await createTaskInDocuments(root, config, {
     sourceType: "experiments",
     task: {
       title: "Review a new workflow",
-      area: "Research",
-      category: "Workflow Research",
+      area: "New Task Area",
+      category: "New Task Category",
       priority: "Urgent",
       status: "Open",
       details: "Run the second session.",
@@ -438,7 +440,8 @@ test("uses the independent project's configured IDs, statuses, and required extr
   });
   const createdTask = created.tasks.find(({ id }) => id === "EXP-002");
   assert.equal(createdTask.status, "Open");
-  assert.equal(createdTask.category, "Workflow Research");
+  assert.equal(createdTask.area, "New Task Area");
+  assert.equal(createdTask.category, "New Task Category");
   assert.equal(createdTask.createdDate, todayDateOnly());
   assert.equal(createdTask.completionDate, "");
 

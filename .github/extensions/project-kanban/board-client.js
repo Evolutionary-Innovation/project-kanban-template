@@ -890,6 +890,186 @@ async function moveTaskToStatus(taskId, status) {
   }
 }
 
+function createSearchableCombobox(control, labelText, suggestions) {
+  const values = [...new Set(suggestions.filter((suggestion) => typeof suggestion === "string" && suggestion.trim()))];
+  const combobox = document.createElement("div");
+  combobox.className = "task-combobox";
+
+  const browseButton = document.createElement("button");
+  browseButton.type = "button";
+  browseButton.className = "secondary-button task-combobox-browse";
+  browseButton.textContent = "▾";
+  browseButton.setAttribute("aria-label", `Browse all ${labelText} values`);
+
+  const popup = document.createElement("div");
+  popup.className = "task-combobox-popup";
+  popup.hidden = true;
+
+  const listbox = document.createElement("div");
+  listbox.id = `${control.id}-options`;
+  listbox.className = "task-combobox-options";
+  listbox.setAttribute("role", "listbox");
+  listbox.setAttribute("aria-label", `${labelText} options`);
+
+  const status = document.createElement("p");
+  status.className = "task-combobox-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.hidden = true;
+  popup.append(listbox, status);
+
+  control.setAttribute("role", "combobox");
+  control.setAttribute("aria-autocomplete", "list");
+  control.setAttribute("aria-haspopup", "listbox");
+  control.setAttribute("aria-controls", listbox.id);
+  control.setAttribute("aria-expanded", "false");
+  browseButton.setAttribute("aria-controls", listbox.id);
+  browseButton.setAttribute("aria-expanded", "false");
+
+  let isOpen = false;
+  let showAllValues = false;
+  let activeIndex = -1;
+  let entries = [];
+
+  function updateActiveOption() {
+    for (const [index, entry] of entries.entries()) {
+      entry.element.classList.toggle("is-active", index === activeIndex);
+    }
+    if (activeIndex === -1) control.removeAttribute("aria-activedescendant");
+    else control.setAttribute("aria-activedescendant", entries[activeIndex].element.id);
+  }
+
+  function renderOptions() {
+    const query = showAllValues ? "" : control.value.trim().toLocaleLowerCase();
+    const matches = values.filter((value) => !query || value.toLocaleLowerCase().includes(query));
+    const normalizedValue = control.value.trim().toLocaleLowerCase();
+    const hasExactMatch = values.some((value) => value.toLocaleLowerCase() === normalizedValue);
+    entries = matches.map((value) => ({ value, label: value, isNew: false }));
+    if (normalizedValue && !hasExactMatch) {
+      entries.push({
+        value: control.value.trim(),
+        label: `Create "${control.value.trim()}"`,
+        isNew: true,
+      });
+    }
+
+    listbox.replaceChildren();
+    for (const [index, entry] of entries.entries()) {
+      const option = document.createElement("div");
+      option.id = `${listbox.id}-option-${index}`;
+      option.className = "task-combobox-option";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", String(!entry.isNew && entry.value === control.value));
+      option.textContent = entry.label;
+      option.addEventListener("mousedown", (event) => event.preventDefault());
+      option.addEventListener("click", () => {
+        control.value = entry.value;
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+        control.dispatchEvent(new Event("change", { bubbles: true }));
+        close();
+      });
+      entry.element = option;
+      listbox.append(option);
+    }
+
+    listbox.hidden = entries.length === 0;
+    status.hidden = entries.length > 0;
+    if (entries.length === 0) {
+      status.textContent = `No known ${labelText.toLocaleLowerCase()} values. Type a value to create one.`;
+    }
+    popup.hidden = !isOpen;
+    updateActiveOption();
+  }
+
+  function open(showAll = false) {
+    isOpen = true;
+    showAllValues = showAll;
+    control.setAttribute("aria-expanded", "true");
+    browseButton.setAttribute("aria-expanded", "true");
+    renderOptions();
+  }
+
+  function close() {
+    isOpen = false;
+    showAllValues = false;
+    activeIndex = -1;
+    control.setAttribute("aria-expanded", "false");
+    browseButton.setAttribute("aria-expanded", "false");
+    renderOptions();
+  }
+
+  function selectOption(index) {
+    const entry = entries[index];
+    if (!entry) return;
+    control.value = entry.value;
+    close();
+  }
+
+  function setActiveOption(index) {
+    if (entries.length === 0) return;
+    activeIndex = (index + entries.length) % entries.length;
+    updateActiveOption();
+    entries[activeIndex].element.scrollIntoView({ block: "nearest" });
+  }
+
+  control.addEventListener("focus", () => {
+    if (!isOpen) open();
+  });
+  control.addEventListener("click", () => {
+    if (!isOpen) open();
+  });
+  control.addEventListener("input", () => {
+    activeIndex = -1;
+    showAllValues = false;
+    if (!isOpen) isOpen = true;
+    control.setAttribute("aria-expanded", "true");
+    browseButton.setAttribute("aria-expanded", "true");
+    renderOptions();
+  });
+  control.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!isOpen) open();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = activeIndex === -1
+        ? (direction === 1 ? 0 : entries.length - 1)
+        : activeIndex + direction;
+      setActiveOption(nextIndex);
+    } else if (event.key === "Enter" && isOpen) {
+      const exactMatchIndex = entries.findIndex(
+        ({ value, isNew }) => !isNew && value.toLocaleLowerCase() === control.value.trim().toLocaleLowerCase(),
+      );
+      if (activeIndex !== -1) {
+        event.preventDefault();
+        selectOption(activeIndex);
+      } else if (exactMatchIndex !== -1) {
+        event.preventDefault();
+        selectOption(exactMatchIndex);
+      } else {
+        close();
+      }
+    } else if (event.key === "Escape" && isOpen) {
+      event.preventDefault();
+      close();
+    }
+  });
+  combobox.addEventListener("focusout", (event) => {
+    if (!combobox.contains(event.relatedTarget)) close();
+  });
+  browseButton.addEventListener("click", () => {
+    if (isOpen && showAllValues) {
+      close();
+      return;
+    }
+    control.focus({ preventScroll: true });
+    open(true);
+    browseButton.setAttribute("aria-expanded", "true");
+  });
+
+  combobox.append(control, browseButton, popup);
+  return combobox;
+}
+
 function createField(name, labelText, value = "", options = {}) {
   const field = document.createElement("div");
   field.className = `task-field${options.fullWidth ? " full-width" : ""}`;
@@ -926,19 +1106,12 @@ function createField(name, labelText, value = "", options = {}) {
   if (options.placeholder) control.placeholder = options.placeholder;
   if (options.required) control.required = true;
   if (options.maxLength) control.maxLength = options.maxLength;
-  field.append(label, control);
-
-  if (options.suggestions?.length) {
-    const datalist = document.createElement("datalist");
-    datalist.id = `${control.id}-suggestions`;
-    control.setAttribute("list", datalist.id);
-    for (const suggestion of options.suggestions) {
-      const option = document.createElement("option");
-      option.value = suggestion;
-      datalist.append(option);
-    }
-    field.append(datalist);
-  }
+  field.append(label);
+  field.append(
+    Array.isArray(options.suggestions)
+      ? createSearchableCombobox(control, labelText, options.suggestions)
+      : control,
+  );
   if (options.dependencyTasks) field.append(createDependencyPicker(control, options.dependencyTasks));
   return field;
 }
@@ -1033,19 +1206,17 @@ function openTaskDialog(mode, taskType, task = null) {
   saveTaskButton.textContent = mode === "create" ? "Create task" : "Save changes";
 
   const areas = [...new Set(boardSnapshot.tasks.map(({ area }) => area).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const categories = [...new Set([
-    source.category,
-    ...boardSnapshot.tasks.map(({ category }) => category).filter(Boolean),
-  ])].sort((a, b) => a.localeCompare(b));
+  const categories = [...new Set(boardSnapshot.tasks.map(({ category }) => category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
   const taskFields = [
     ["title", "Title", task?.title ?? "", {
       required: true, maxLength: 200, fullWidth: true,
     }],
     ["category", "Category", task?.category ?? source.category, {
-      required: true, maxLength: 100, suggestions: categories,
+      required: true, maxLength: 100, placeholder: "Search or enter a category", suggestions: categories,
     }],
     ["area", "Area", task?.area ?? "", {
-      required: true, maxLength: 100, suggestions: areas,
+      required: true, maxLength: 100, placeholder: "Search or enter an area", suggestions: areas,
     }],
     ["details", "Details", task?.details ?? "", {
       multiline: true, maxLength: 5000, fullWidth: true,

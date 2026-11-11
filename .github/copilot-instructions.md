@@ -1,3 +1,5 @@
+# Version 2.2
+
 # Global Engineering Principles
 
 These rules apply to all projects unless explicitly overridden.
@@ -39,11 +41,33 @@ Before using framework or library documentation:
 
 ### Sequential Thinking
 
-For non-trivial design, architecture, debugging or planning tasks:
+Use Sequential Thinking when:
+
+- Multiple plausible root causes exist.
+- Architecture decisions are required.
+- Significant trade-offs must be evaluated.
+- The correct implementation approach is unclear.
+- Root cause remains uncertain after initial investigation.
+
+During reasoning:
 
 - Explicitly separate observations, assumptions and conclusions.
 - Consider alternative explanations and approaches.
 - Prefer evidence and verification over intuition.
+
+Avoid extensive sequential analysis when:
+
+- Logs identify a likely fault location.
+- Failing tests identify the cause.
+- A schema mismatch is evident.
+- A validator, type, import, route, unit or configuration problem has been isolated.
+- A minimal, low-risk fix is apparent.
+
+In these situations prefer:
+
+observe → patch → test → verify
+
+over extended investigation.
 
 ---
 
@@ -72,10 +96,29 @@ Architecture should make future change easier, not harder.
 
 Documentation is part of the deliverable.
 
-Before significant changes review:
+Documentation effort must be proportional to the change.
+
+Major feature work, architectural changes and new workflows
+require detailed documentation updates.
+
+Routine bug fixes, test fixes, validation fixes and
+configuration fixes should only update documentation when:
+
+- behaviour changes intentionally
+- architecture changes
+- a new limitation is discovered
+- future work must be tracked
+
+Do not create documentation updates merely because code changed.
+
+Before significant architectural, infrastructure, security,
+data-model or workflow changes review:
 
 - docs/architecture.md
 - docs/decisions.md
+
+Before roadmap or task planning work review:
+
 - docs/roadmap.md
 - docs/technical-debt.md
 
@@ -322,6 +365,251 @@ Markdown remains the canonical source of truth.
 
 # AI Agent Requirements
 
+## Project Planning Documentation Generated During Agent Interactions
+
+For every roadmap item, task, initiative, RM, RA, TD, etc or project code:
+
+1. All chat specific planning documents created during execution must be stored under:
+
+   docs/<task-code>/
+
+   Examples:
+   docs/rm-090/
+   docs/rm-071/
+   docs/ra-002/
+   docs/td-050/
+
+2. Planning documents include, but are not limited to:
+   - plan.md
+   - design.md
+   - implementation.md
+   - deployment.md
+   - validation.md
+   - phase documents
+   - migration plans
+   - architecture notes
+   - decision records specific to the task
+
+3. Documentation review must be proportional to the change.
+
+   Required for:
+   - New feature development
+   - Architecture work
+   - Deployment work
+   - Multi-file refactoring
+   - Roadmap planning
+   - Technical debt initiatives
+
+   Optional for:
+   - Localised bug fixes
+   - Validation fixes
+   - Build fixes
+   - Test fixes
+   - Configuration fixes
+
+   For isolated defects, review only the documents directly relevant
+   to the affected functionality.
+
+4. Do not rely solely on conversational history or memory when a task folder exists.
+
+5. If a task folder exists but has not been reviewed during the
+   current session:
+
+   Required before:
+   - planning new feature work
+   - architecture work
+   - roadmap updates
+   - phase completion decisions
+   - deployment work
+
+   Optional for:
+   - localised bug fixes
+   - validation fixes
+   - build fixes
+   - configuration fixes
+   - test fixes
+
+   For isolated defects, review only the documents directly related
+   to the affected functionality.
+
+6. If the user references:
+   - "the plan"
+   - "the roadmap"
+   - a task code (RM-090, RA-002, etc.)
+   - a project phase
+   - a migration or deployment effort
+
+   first review the corresponding docs/<task-code>/ documents before responding.
+
+7. Documentation in the task folder overrides conversational summaries when conflicts exist.
+
+8. Always update the relevant planning documents in the task folder to reflect new decisions, changes, or progress.
+
+---
+
+## Phase Awareness
+
+When a task contains defined phases (A-E, Phase 1-5, etc.):
+
+- Read the phase plan before continuing work.
+- Track progress against the documented phases.
+- Report status using the phase structure defined in the task documents.
+- Do not infer phase structure solely from chat history.
+- Update the phase plan as progress is made or changes occur.
+
+## Phase Reconstruction
+
+When a task references phases
+(A-E, Phase 1-5, etc.):
+
+1. Read the phase plan before reporting status.
+2. Determine current phase from documented progress.
+3. Track and report progress using the documented phase structure.
+4. Never infer phase status from partial conversation history.
+
+---
+
+## Session Recovery
+
+When resuming an existing task after a new chat, checkpoint restore,
+or loss of context:
+
+1. Read the task folder before taking any action.
+2. Reconstruct task state from:
+   - plan.md
+   - phase documents
+   - implementation notes
+   - validation notes
+   - roadmap status
+3. Do not rely on conversational memory for task state.
+4. Treat the task folder as the authoritative recovery source.
+
+---
+
+## Investigation Loops
+
+If the same blocker has been analysed repeatedly
+without producing:
+
+- new evidence
+- code changes
+- configuration changes
+- test results
+
+then:
+
+1. Stop repeating analysis.
+2. State the missing evidence explicitly.
+3. Obtain the evidence or request it.
+4. Do not create additional roadmap or documentation updates
+   unless new evidence exists.
+
+A blocker is considered analysed when:
+
+- a root cause has been identified, or
+- a specific hypothesis can be tested directly.
+
+Do not continue investigation solely to increase confidence when a low-risk validation path exists.
+
+Prefer proving or disproving hypotheses through implementation and testing.
+
+Prefer moving to implementation and testing once sufficient evidence is available.
+
+## Investigation Budget
+
+Investigations must be proportional to risk.
+
+### Low Risk
+
+Examples:
+
+- Bug fixes
+- Validation fixes
+- Unit mismatches
+- Type errors
+- Build issues
+- Configuration issues
+- Test failures
+
+Approach:
+
+- Identify likely root cause.
+- Inspect only the files directly involved.
+- Implement the smallest safe fix.
+- Validate using focused tests.
+- Stop once the fix has been verified.
+
+Maximum initial scope:
+
+- One root-cause hypothesis.
+- Files directly involved in execution path.
+- Focused test execution.
+
+Expand scope only if evidence contradicts the current hypothesis.
+
+### Medium Risk
+
+Examples:
+
+- Multi-component feature changes
+- Refactoring
+- API changes
+
+Broader investigation is permitted.
+
+### High Risk
+
+Examples:
+
+- Architecture changes
+- Security-sensitive changes
+- Infrastructure changes
+- Data model changes
+
+Comprehensive investigation is encouraged.
+
+Avoid continuing investigation once:
+
+- Root cause has been identified.
+- Supporting evidence exists.
+- A minimal safe fix is available.
+- Verification can be performed through testing.
+
+At that point move to implementation.
+
+## Bug Fix Fast Path
+
+When:
+
+- Production logs identify a likely cause.
+- A failing test identifies the cause.
+- A schema mismatch is evident.
+- A validation rule is failing.
+- A type error identifies the location.
+- A unit mismatch is evident.
+- A configuration defect has been isolated.
+
+The preferred workflow is:
+
+1. Confirm the evidence.
+2. Implement the smallest safe fix.
+3. Run targeted validation.
+4. Verify the result.
+5. Stop.
+
+Do not broaden the investigation unless:
+
+- The fix fails.
+- Contradictory evidence appears.
+- Additional root causes are identified.
+- The change becomes architectural in nature.
+
+Prefer restoring correct behaviour over continued root-cause exploration once sufficient evidence exists.
+
+---
+
+## Canvas Management
+
 When generating project canvases:
 
 1. Read authoritative project documents.
@@ -521,6 +809,50 @@ Avoid:
 
 ---
 
+## Task Completion Bias
+
+The objective is to complete work safely and efficiently.
+
+Do not maximise analysis for its own sake.
+
+When a likely root cause has been identified:
+
+1. Implement the smallest safe fix.
+2. Run the minimum validation required.
+3. Verify the result.
+4. Stop investigating unless contradictory evidence appears.
+
+Prefer:
+
+- fixing over theorising
+- testing over speculation
+- delivery over additional analysis
+
+Do not broaden scope without evidence.
+
+## Analysis Termination
+
+Analysis should terminate when:
+
+- A root cause has been identified.
+- Supporting evidence exists.
+- A low-risk fix exists.
+- Validation can prove the outcome.
+
+Further investigation requires a specific unanswered question.
+
+Do not continue analysing solely to:
+
+- Increase confidence.
+- Gather additional supporting evidence.
+- Re-read previously reviewed documentation.
+- Revisit resolved hypotheses.
+- Explore unrelated components.
+
+Implementation and validation are preferred over additional analysis when sufficient evidence exists.
+
+---
+
 ## Testing
 
 New functionality should be accompanied by appropriate automated tests.
@@ -562,6 +894,38 @@ Ask:
 - What evidence supports this?
 - What evidence rejects this?
 - What evidence do we currently have?
+
+Sufficient evidence is sufficient.
+
+Once evidence supports a likely conclusion and a low-risk
+validation path exists:
+
+- Prefer implementation over additional analysis.
+- Prefer testing over further investigation.
+- Prefer verification over confidence-seeking.
+
+Do not continue gathering evidence only to increase confidence
+when the result can be validated directly.
+
+---
+
+# Docker Storage Hygiene Policy
+
+## Objective
+
+Prevent Docker, BuildKit and containerd artefacts from silently filling the Linux root partition during development work.
+
+The workstation root volume is only 59 GB and Docker build activity has repeatedly filled it above 95% utilisation. Docker hygiene is therefore a mandatory part of all build, validation and deployment workflows.
+
+---
+
+## Always Safe Cleanup
+
+After completing any Docker build, validation, smoke test, CI simulation, ECR push or image generation workflow, execute:
+
+```bash
+docker builder prune -a -f
+```
 
 ---
 

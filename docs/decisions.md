@@ -172,3 +172,12 @@ Record significant decisions. Do not use this log as a task list; link to the ow
 - **Alternatives considered:** Keep Acceptance Criteria as a configured extra field; require a new task-table schema version and migrate all consumers before use; or make the field globally required.
 - **Decision:** Add `acceptanceCriteria` as an optional core task string with a dedicated Markdown column. Parse a missing column/value as an empty string, validate supplied values up to 5,000 characters, and add the column when an older source is normalized for a write. Keep the schema marker and configuration version at v1.
 - **Consequences:** Existing task tables and create callers remain valid, with blank criteria until explicitly supplied. New and normalized tables share a consistent column, all edits continue through the locked/revision-checked atomic write, and no completion criteria are fabricated for historical tasks.
+
+## ADR-20: Release legacy-format parser removal as a major version
+
+- **Status:** Accepted
+- **Observations:** The published `v2.0.0` runtime included configured legacy-format parsing and migration. The current runtime restricts task loading to canonical schema-v1 tables and accepts `legacyAdapter` only as a validated no-op. The later `v2.1.1` tag was never published, so it did not provide a public deprecation release.
+- **Assumptions:** Consumers can identify non-canonical sources and convert them with project-owned migration utilities before adopting the new runtime. Historical ID aliases remain independently supported through `legacyIdPrefixes`.
+- **Alternatives considered:** Restore legacy parsing in the shared runtime for a minor release; publish the current behavior as a minor release despite the compatibility break; or use a major release with explicit migration guidance.
+- **Decision:** Use `v3.0.0` for the first post-inversion release that removes legacy-format parsing. Do not restore the adapter. Keep schema v1 and `configVersion: 1` for canonical task tables, retain `legacyAdapter` as a no-op configuration compatibility field, and document that non-canonical documents must be explicitly converted before upgrade.
+- **Consequences:** Consumers using legacy-format documents must migrate them before adopting v3.0.0. The release must state its canonical-schema-only contract, provide migration steps, and preserve the existing Markdown transaction, locking, revision, atomic replacement, and conflict guarantees. See [release governance](release-governance.md) and the [v3.0.0 release plan](v3.0.0/plan.md).

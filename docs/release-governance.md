@@ -28,7 +28,7 @@ Version numbers describe different contracts and must not be conflated:
 
 | Version | Meaning | Current value |
 |---|---|---|
-| Extension release | Versioned runtime behavior and its documented compatibility contract | Git tag, currently `v2.1.1` |
+| Extension release | Versioned runtime behavior and its documented compatibility contract | Latest published release `v2.0.0`; `v2.1.1` is tag-only |
 | Task-table schema | Markdown table marker and parser contract | Schema v1 (`project-kanban-schema:1`) |
 | Configuration | Shape accepted by `project-kanban.config.json` | `configVersion: 1` |
 | Consumer compatibility | Schema/config versions and host/capabilities explicitly supported by a release | Declared in each release's notes |
@@ -39,7 +39,7 @@ The root README intentionally has no fixed release number. Git tags are immutabl
 
 ### Initial release baseline
 
-The repository has a `v2.1.1` Git tag, while the latest published GitHub Release is `v2.0.0`. The `v2.1.1` tag is not retroactively treated as a published release. There are backward-compatible user-facing additions after that tag, including dependency suggestions and planning routes; the first authoritative release candidate should therefore use `v2.2.0`, subject to the release checklist below. RM-005 documents governance only and does not create a tag or publish a release.
+The repository has a `v2.1.1` Git tag, while the latest published GitHub Release is `v2.0.0`. The `v2.1.1` tag is not retroactively treated as a published release. The first post-inversion release candidate is `v3.0.0`: the current runtime no longer parses or migrates legacy-format task documents, behavior that was present in the published `v2.0.0` runtime. This is a breaking runtime change under the versioning policy. The proposed release must include explicit migration guidance and pass the release checklist below. The earlier `v2.2.0` and `v2.3.0` proposals were not published and must not be tagged or reused. RM-005 documents governance only and does not create a tag or publish a release.
 
 ## Host support policy
 
@@ -65,7 +65,7 @@ RM-001 tracks additional-host validation. It remains open until that work is com
 | GitHub Release | Final tag and release notes are reviewed | A non-draft GitHub Release is published from that tag with the exact source commit and compatibility statement |
 | Consumer adoption | Published release is selected by the consumer owner | Consumer diff, validation, approval, sync commit, and provenance record are complete |
 
-If a preview is distributed, use a distinct prerelease tag such as `v2.2.0-rc.1`; never use a final version tag for a candidate. Do not publish from an unreviewed working tree or an untagged branch snapshot.
+If a preview is distributed, use a distinct prerelease tag such as `v3.0.0-rc.1`; never use a final version tag for a candidate. Do not publish from an unreviewed working tree or an untagged branch snapshot.
 
 ### Mandatory release checklist
 

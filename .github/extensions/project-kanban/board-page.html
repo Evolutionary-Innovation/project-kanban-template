@@ -37,10 +37,6 @@
       </div>
 
       <section class="view-toolbar" aria-label="Shared task search and filters">
-        <div class="view-control-block view-control-actions">
-          <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
-          <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
-        </div>
         <div class="view-control-block view-control-search">
           <label class="view-field search-field">
             Search tasks
@@ -75,7 +71,11 @@
             <fieldset class="filter-options"><legend>Dependency state</legend></fieldset>
           </details>
           <button id="review-dependency-suggestions" class="secondary-button" type="button" aria-expanded="false" aria-controls="dependency-suggestions-panel">Dependency suggestions (0)</button>
+        </div>
+        <div class="view-control-block view-control-actions">
           <button id="clear-filters" class="secondary-button" type="button">Clear</button>
+          <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
+          <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
         </div>
       </section>
       <div id="active-filter-chips" class="active-filter-chips" role="group" aria-label="Active filters" hidden></div>

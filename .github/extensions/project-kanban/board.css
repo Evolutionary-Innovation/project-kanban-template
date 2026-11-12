@@ -1083,24 +1083,94 @@ h1 span {
 }
 
 .view-toolbar {
-  display: grid;
-  grid-template-columns:
-    max-content max-content minmax(170px, 1.7fr) repeat(5, minmax(100px, 1fr))
-    minmax(140px, 1.4fr) max-content max-content;
+  display: flex;
+  flex-wrap: wrap;
   align-items: start;
   gap: 6px;
   margin: 0 0 16px;
 }
 
 .view-control-block {
-  display: contents;
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.view-control-search {
+  flex-basis: 438px;
+}
+
+.view-control-metadata {
+  flex-basis: 290px;
+}
+
+.view-control-dependencies {
+  flex-basis: 341px;
+}
+
+.view-field {
+  flex: 1 1 100px;
+}
+
+.search-field {
+  flex-basis: 245px;
+  min-width: 245px;
+}
+
+.search-field input {
+  font-size: 0.68rem;
+}
+
+#source-filter {
+  min-width: 88px;
+}
+
+#status-filter {
+  min-width: 93px;
+}
+
+#priority-filter {
+  min-width: 97px;
+}
+
+#category-filter {
+  min-width: 104px;
+}
+
+#area-filter {
+  min-width: 77px;
+}
+
+.view-control-dependencies #dependency-filter {
+  flex: 0 0 150px;
+  min-width: 150px;
+}
+
+.view-control-dependencies #review-dependency-suggestions {
+  flex: 0 0 auto;
 }
 
 .view-control-actions {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: flex-start;
   gap: 5px;
+}
+
+@media (max-width: 1340px) {
+  .view-control-actions {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 800px) {
+  .view-control-dependencies {
+    flex-basis: 100%;
+  }
 }
 
 .view-control-block .secondary-button {
@@ -1142,17 +1212,17 @@ h1 span {
 
 .filter-field summary {
   min-height: 36px;
-  padding: 9px 28px 8px 9px;
-  overflow: hidden;
+  padding: 9px 20px 8px 7px;
   border: 1px solid #d3e1e3;
   border-radius: 8px;
   background: #fff;
   color: #355565;
-  font-size: 0.73rem;
+  font-size: 0.72rem;
   font-weight: 650;
   line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
   cursor: pointer;
   list-style: none;
 }
@@ -1164,7 +1234,7 @@ h1 span {
 .filter-field summary::after {
   position: absolute;
   top: 9px;
-  right: 10px;
+  right: 6px;
   content: "▾";
   color: #536b76;
 }
@@ -1238,41 +1308,6 @@ h1 span {
 .filter-chip:hover {
   border-color: #83b4b1;
   background: #e7f2f1;
-}
-
-@media (max-width: 1199px) {
-  .view-toolbar {
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .view-control-block {
-    display: grid;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .view-control-actions {
-    display: flex;
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .view-control-search {
-    grid-template-columns: minmax(180px, 1.5fr) repeat(2, minmax(120px, 1fr));
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .view-control-metadata {
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
-    grid-column: 1 / -1;
-  }
-
-  .view-control-dependencies {
-    grid-template-columns: minmax(140px, 1fr) max-content max-content;
-    grid-column: 1 / -1;
-  }
 }
 
 .ordering-hint {
@@ -2008,20 +2043,13 @@ h1 span {
     grid-template-columns: 1fr;
   }
 
-  .view-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .view-control-block {
-    grid-template-columns: minmax(0, 1fr);
+    flex-basis: 100%;
+    flex-wrap: wrap;
   }
 
-  .view-control-actions,
-  .view-control-search,
-  .view-control-metadata,
-  .view-control-dependencies {
-    grid-column: 1;
-    grid-row: auto;
+  .search-field {
+    flex-basis: 100%;
   }
 
   .task-field.full-width {

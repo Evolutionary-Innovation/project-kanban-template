@@ -1084,10 +1084,31 @@ h1 span {
 
 .view-toolbar {
   display: grid;
-  grid-template-columns: minmax(230px, 2fr) repeat(6, minmax(120px, 1fr)) auto;
+  grid-template-columns:
+    max-content max-content minmax(170px, 1.7fr) repeat(5, minmax(100px, 1fr))
+    minmax(140px, 1.4fr) max-content max-content;
   align-items: start;
-  gap: 10px;
+  gap: 6px;
   margin: 0 0 16px;
+}
+
+.view-control-block {
+  display: contents;
+}
+
+.view-control-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.view-control-block .secondary-button {
+  white-space: nowrap;
+}
+
+.view-control-dependencies #review-dependency-suggestions {
+  white-space: nowrap;
 }
 
 .view-field {
@@ -1219,15 +1240,39 @@ h1 span {
   background: #e7f2f1;
 }
 
-.view-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
-}
+@media (max-width: 1199px) {
+  .view-toolbar {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 10px;
+  }
 
-.view-actions .secondary-button {
-  min-height: 36px;
+  .view-control-block {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .view-control-actions {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .view-control-search {
+    grid-template-columns: minmax(180px, 1.5fr) repeat(2, minmax(120px, 1fr));
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .view-control-metadata {
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    grid-column: 1 / -1;
+  }
+
+  .view-control-dependencies {
+    grid-template-columns: minmax(140px, 1fr) max-content max-content;
+    grid-column: 1 / -1;
+  }
 }
 
 .ordering-hint {
@@ -1964,16 +2009,19 @@ h1 span {
   }
 
   .view-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .search-field {
-    grid-column: 1 / -1;
+  .view-control-block {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .view-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
+  .view-control-actions,
+  .view-control-search,
+  .view-control-metadata,
+  .view-control-dependencies {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .task-field.full-width {

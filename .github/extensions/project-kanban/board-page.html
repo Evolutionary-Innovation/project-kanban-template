@@ -37,39 +37,45 @@
       </div>
 
       <section class="view-toolbar" aria-label="Shared task search and filters">
-        <label class="view-field search-field">
-          Search tasks
-          <input id="task-search" type="search" autocomplete="off" placeholder="Title, details, rationale, recommendations…" />
-        </label>
-        <details id="source-filter" class="view-field filter-field" data-filter="source" data-filter-label="Source" data-all-label="All sources">
-          <summary>All sources</summary>
-          <fieldset class="filter-options"><legend>Source</legend></fieldset>
-        </details>
-        <details id="status-filter" class="view-field filter-field" data-filter="status" data-filter-label="Status" data-all-label="All statuses">
-          <summary>All statuses</summary>
-          <fieldset class="filter-options"><legend>Status</legend></fieldset>
-        </details>
-        <details id="priority-filter" class="view-field filter-field" data-filter="priority" data-filter-label="Priority" data-all-label="All priorities">
-          <summary>All priorities</summary>
-          <fieldset class="filter-options"><legend>Priority</legend></fieldset>
-        </details>
-        <details id="category-filter" class="view-field filter-field" data-filter="category" data-filter-label="Category" data-all-label="All categories">
-          <summary>All categories</summary>
-          <fieldset class="filter-options"><legend>Category</legend></fieldset>
-        </details>
-        <details id="area-filter" class="view-field filter-field" data-filter="area" data-filter-label="Area" data-all-label="All areas">
-          <summary>All areas</summary>
-          <fieldset class="filter-options"><legend>Area</legend></fieldset>
-        </details>
-        <details id="dependency-filter" class="view-field filter-field" data-filter="dependency" data-filter-label="Dependency state" data-all-label="All dependency states">
-          <summary>All dependency states</summary>
-          <fieldset class="filter-options"><legend>Dependency state</legend></fieldset>
-        </details>
-        <div class="view-actions">
-          <button id="review-dependency-suggestions" class="secondary-button" type="button" aria-expanded="false" aria-controls="dependency-suggestions-panel">Dependency suggestions (0)</button>
-          <button id="clear-filters" class="secondary-button" type="button">Clear</button>
+        <div class="view-control-block view-control-actions">
           <button id="collapse-all" class="secondary-button board-only-action" type="button">Collapse all</button>
           <button id="expand-all" class="secondary-button board-only-action" type="button">Expand all</button>
+        </div>
+        <div class="view-control-block view-control-search">
+          <label class="view-field search-field">
+            Search tasks
+            <input id="task-search" type="search" autocomplete="off" placeholder="Title, details, rationale, recommendations…" />
+          </label>
+          <details id="source-filter" class="view-field filter-field" data-filter="source" data-filter-label="Source" data-all-label="All sources">
+            <summary>All sources</summary>
+            <fieldset class="filter-options"><legend>Source</legend></fieldset>
+          </details>
+          <details id="status-filter" class="view-field filter-field" data-filter="status" data-filter-label="Status" data-all-label="All statuses">
+            <summary>All statuses</summary>
+            <fieldset class="filter-options"><legend>Status</legend></fieldset>
+          </details>
+        </div>
+        <div class="view-control-block view-control-metadata">
+          <details id="priority-filter" class="view-field filter-field" data-filter="priority" data-filter-label="Priority" data-all-label="All priorities">
+            <summary>All priorities</summary>
+            <fieldset class="filter-options"><legend>Priority</legend></fieldset>
+          </details>
+          <details id="category-filter" class="view-field filter-field" data-filter="category" data-filter-label="Category" data-all-label="All categories">
+            <summary>All categories</summary>
+            <fieldset class="filter-options"><legend>Category</legend></fieldset>
+          </details>
+          <details id="area-filter" class="view-field filter-field" data-filter="area" data-filter-label="Area" data-all-label="All areas">
+            <summary>All areas</summary>
+            <fieldset class="filter-options"><legend>Area</legend></fieldset>
+          </details>
+        </div>
+        <div class="view-control-block view-control-dependencies">
+          <details id="dependency-filter" class="view-field filter-field" data-filter="dependency" data-filter-label="Dependency state" data-all-label="All dependency states">
+            <summary>All dependency states</summary>
+            <fieldset class="filter-options"><legend>Dependency state</legend></fieldset>
+          </details>
+          <button id="review-dependency-suggestions" class="secondary-button" type="button" aria-expanded="false" aria-controls="dependency-suggestions-panel">Dependency suggestions (0)</button>
+          <button id="clear-filters" class="secondary-button" type="button">Clear</button>
         </div>
       </section>
       <div id="active-filter-chips" class="active-filter-chips" role="group" aria-label="Active filters" hidden></div>

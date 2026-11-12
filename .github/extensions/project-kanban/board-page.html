@@ -194,14 +194,13 @@
         </div>
         <div id="graph-toolbar" class="graph-controls graph-toolbar" aria-label="Graph controls">
           <div class="graph-toolbar-group" role="group" aria-label="Graph viewport controls">
-            <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit</button>
-            <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset</button>
-            <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom out</button>
+            <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom In</button>
+            <button class="secondary-button" type="button" data-graph-zoom="out" disabled>Zoom Out</button>
             <label class="graph-zoom-field">Zoom (%)
               <input id="graph-zoom-input" type="number" min="1" max="200" step="1" inputmode="numeric" value="100" disabled>
             </label>
-            <output id="graph-zoom" aria-label="Current graph zoom" aria-live="polite">100%</output>
-            <button class="secondary-button" type="button" data-graph-zoom="in" disabled>Zoom in</button>
+            <button class="secondary-button" type="button" data-graph-zoom="fit" disabled>Fit</button>
+            <button class="secondary-button" type="button" data-graph-zoom="reset" disabled>Reset</button>
           </div>
           <div class="graph-toolbar-group" role="group" aria-label="Selected task controls">
             <button id="graph-focus-neighbourhood" class="secondary-button" type="button" disabled>Focus neighbourhood</button>

@@ -625,7 +625,7 @@ h1 span {
 }
 
 #graph-zoom-input {
-  width: 5.5ch;
+  width: 11ch;
   text-align: right;
 }
 
@@ -685,12 +685,6 @@ h1 span {
 
 .view-toolbar.graph-active .board-only-action {
   display: none;
-}
-
-#graph-zoom {
-  min-width: 4em;
-  color: #536b76;
-  font-size: 0.8rem;
 }
 
 #graph-message {

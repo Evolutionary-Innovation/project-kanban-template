@@ -42,7 +42,6 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
   const contextMenu = root.querySelector("#graph-context-menu");
   const errorPanel = root.querySelector("#graph-error");
   const errorMessage = root.querySelector("#graph-error-message");
-  const zoomLabel = root.querySelector("#graph-zoom");
   const zoomInput = root.querySelector("#graph-zoom-input");
   const viewportControls = [...root.querySelectorAll("[data-graph-zoom]")];
   let generation = 0;
@@ -468,7 +467,6 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     zoom = Math.max(0.01, Math.min(2, value));
     diagram.setAttribute("width", String(Math.ceil(positions.width * zoom)));
     diagram.setAttribute("height", String(Math.ceil(positions.height * zoom)));
-    zoomLabel.textContent = `${(zoom * 100).toFixed(zoom < 0.01 ? 1 : 0)}%`;
     zoomInput.value = String(Math.round(zoom * 100));
     if (resetScroll) {
       viewport.scrollLeft = 0;
@@ -862,7 +860,6 @@ export function createGraphController(root, { onEditTask, onShowOnBoard } = {}) 
     errorMessage.textContent = text;
     errorPanel.hidden = false;
     viewport.hidden = true;
-    zoomLabel.textContent = "";
     updateToolbar();
     message.textContent = model
       ? `Dependency diagram unavailable. ${model.taskCount} tasks remain available in the relationship list.`
